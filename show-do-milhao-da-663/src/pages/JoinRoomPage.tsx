@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import BrandLogo from '../components/BrandLogo';
 import PlayerAvatar from '../components/PlayerAvatar';
+import { joinRoomInSupabase } from '../lib/roomRepository';
 import {
   defaultAvatar,
   type AvatarAppearance,
@@ -16,8 +17,9 @@ function JoinRoomPage() {
   const [playerName, setPlayerName] = useState('');
   const [isWaiting, setIsWaiting] = useState(false);
   const [error, setError] = useState('');
-  const [avatar, setAvatar] =
-  useState<AvatarAppearance>({ ...defaultAvatar });
+  const [avatar, setAvatar] = useState<AvatarAppearance>({ ...defaultAvatar });
+  const [isJoining, setIsJoining] = useState(false);
+  const [joinedRoom, setJoinedRoom] = useState<{ roomId: string; playerId: string; } | null>(null);
 
     function updateAvatar<K extends keyof AvatarAppearance>(
     property: K,
@@ -29,23 +31,54 @@ function JoinRoomPage() {
     }));
     }
 
-  function handleJoin(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError('');
+  async function handleJoin(
+        event: React.FormEvent<HTMLFormElement>,
+        ) {
+        event.preventDefault();
+        setError('');
 
-    if (roomCode.trim().length < 4) {
-      setError('Informe um código de sala válido.');
-      return;
+        const normalizedCode = roomCode.trim().toUpperCase();
+        const normalizedName = playerName.trim();
+
+        if (normalizedCode.length !== 6) {
+            setError('Informe o código de seis caracteres da sala.');
+            return;
+        }
+
+        if (!normalizedName) {
+            setError('Informe seu apelido.');
+            return;
+        }
+
+        setIsJoining(true);
+
+        try {
+            const result = await joinRoomInSupabase(
+            normalizedCode,
+            normalizedName,
+            avatar,
+            );
+
+            setRoomCode(result.roomCode);
+            setJoinedRoom({
+            roomId: result.roomId,
+            playerId: result.playerId,
+            });
+
+            setIsWaiting(true);
+        } catch (error: unknown) {
+            console.error('Erro ao entrar na sala:', error);
+
+            const message =
+            error instanceof Error
+                ? error.message
+                : 'Não foi possível entrar na sala.';
+
+            setError(message);
+        } finally {
+            setIsJoining(false);
+        }
     }
-
-    if (!playerName.trim()) {
-      setError('Informe seu apelido.');
-      return;
-    }
-
-    setRoomCode(roomCode.trim().toUpperCase());
-    setIsWaiting(true);
-  }
 
   function handleLeave() {
     setIsWaiting(false);
@@ -53,10 +86,17 @@ function JoinRoomPage() {
   }
 
   function handleStartSimulation() {
+        if (!joinedRoom) {
+            setError('Entre na sala antes de continuar.');
+            return;
+        }
+
         navigate(`/jogar/${roomCode}`, {
             state: {
             playerName: playerName.trim(),
             avatar,
+            roomId: joinedRoom.roomId,
+            playerId: joinedRoom.playerId,
             },
         });
     }
@@ -240,8 +280,12 @@ function JoinRoomPage() {
               </div>
             )}
 
-            <button className="button button-primary button-full" type="submit">
-              Entrar na sala →
+            <button
+                className="button button-primary button-full"
+                type="submit"
+                disabled={isJoining}
+                >
+                {isJoining ? 'Entrando na sala...' : 'Entrar na sala →'}
             </button>
           </form>
         </>
@@ -269,8 +313,8 @@ function JoinRoomPage() {
           </div>
 
           <div className="feedback">
-            Esta é uma sala de demonstração. Outros jogadores ainda não
-            aparecem porque o multiplayer não está conectado.
+            Você foi registrado na nuvem! A atualização dos jogadores
+            em tempo real será conectada na próxima etapa.
           </div>
 
           <div className="form-actions">

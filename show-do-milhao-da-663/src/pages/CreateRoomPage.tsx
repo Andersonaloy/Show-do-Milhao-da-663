@@ -1,9 +1,9 @@
-
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import BrandLogo from '../components/BrandLogo';
 import type { QuizDefinition, QuizQuestion } from '../types/quiz';
 import { saveQuizInSupabase } from '../lib/quizRepository';
+import { createRoomInSupabase } from '../lib/roomRepository';
 
 const DRAFT_KEY = 'show663-quiz-draft';
 const SAVED_KEY = 'show663-saved-quizzes';
@@ -240,27 +240,38 @@ function CreateRoomPage() {
         }
     }
 
-  function createRoom() {
-    if (!isSaved) {
-      setError('Salve o quiz antes de criar a sala.');
-      return;
+  async function createRoom() {
+        setError('');
+        setNotice('');
+
+        if (!isSaved) {
+            setError('Salve o quiz antes de criar a sala.');
+            return;
+        }
+
+        try {
+            const roomCode = await createRoomInSupabase(quiz.id);
+
+            navigate(`/anfitriao/${roomCode}`, {
+            state: {
+                hostName: quiz.hostName,
+                questionCount: quiz.questions.length,
+                questionTime: quiz.questionTime,
+                quizId: quiz.id,
+                quizTitle: quiz.title,
+            },
+            });
+        } catch (error: unknown) {
+            console.error('Erro ao criar sala no Supabase:', error);
+
+            const message =
+            error instanceof Error
+                ? error.message
+                : JSON.stringify(error);
+
+            setError(message || 'Não foi possível criar a sala na nuvem.');
+        }
     }
-
-    const roomCode = Math.random()
-      .toString(36)
-      .substring(2, 8)
-      .toUpperCase();
-
-    navigate(`/anfitriao/${roomCode}`, {
-      state: {
-        hostName: quiz.hostName,
-        questionCount: quiz.questions.length,
-        questionTime: quiz.questionTime,
-        quizId: quiz.id,
-        quizTitle: quiz.title,
-      },
-    });
-  }
 
   const currentPreview = quiz.questions[previewIndex];
 

@@ -1,5 +1,6 @@
 import { supabase } from './supabaseClient';
 import { ensureAnonymousSession } from './anonymousAuth';
+import type { AvatarAppearance } from '../types/playerAvatar';
 
 export async function createRoomInSupabase(
   quizId: string,
@@ -55,4 +56,38 @@ export async function createRoomInSupabase(
   throw new Error(
     'Não foi possível gerar um código exclusivo. Tente novamente.',
   );
+}
+
+export async function joinRoomInSupabase(
+  roomCode: string,
+  playerName: string,
+  avatar: AvatarAppearance,
+): Promise<{
+  roomId: string;
+  playerId: string;
+  roomCode: string;
+}> {
+  await ensureAnonymousSession();
+
+  const { data, error } = await supabase.rpc('join_room_by_code', {
+    p_room_code: roomCode.trim().toUpperCase(),
+    p_player_name: playerName.trim(),
+    p_avatar: avatar,
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const result = data?.[0];
+
+  if (!result) {
+    throw new Error('O Supabase não confirmou a entrada na sala.');
+  }
+
+  return {
+    roomId: result.room_id,
+    playerId: result.player_id,
+    roomCode: result.room_code,
+  };
 }
