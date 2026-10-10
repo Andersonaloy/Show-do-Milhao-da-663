@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import BrandLogo from '../components/BrandLogo';
 import type { QuizDefinition, QuizQuestion } from '../types/quiz';
+import { saveQuizInSupabase } from '../lib/quizRepository';
 
 const DRAFT_KEY = 'show663-quiz-draft';
 const SAVED_KEY = 'show663-saved-quizzes';
@@ -162,52 +163,82 @@ function CreateRoomPage() {
     return '';
   }
 
-  function saveQuiz() {
-    setError('');
-    setNotice('');
+  async function saveQuiz() {
+        setError('');
+        setNotice('');
 
-    const validationError = validateQuiz();
+        const validationError = validateQuiz();
 
-    if (validationError) {
-      setError(validationError);
-      return;
+        if (validationError) {
+            setError(validationError);
+            return;
+        }
+
+        if (!password.trim()) {
+            setError('Informe a senha de autorização.');
+            return;
+        }
+
+        const quizToSave: QuizDefinition = {
+            ...quiz,
+            title: quiz.title.trim(),
+            hostName: quiz.hostName.trim(),
+            updatedAt: new Date().toISOString(),
+        };
+
+        // Primeiro, salva o quiz no Supabase.
+        let savedQuiz: QuizDefinition;
+
+        try {
+            savedQuiz = await saveQuizInSupabase(quizToSave);
+        } catch (error) {
+            console.error('Erro ao salvar quiz no Supabase:', error);
+
+            setError(
+            error instanceof Error
+                ? `Não foi possível salvar no Supabase: ${error.message}`
+                : 'Ocorreu um erro ao salvar o quiz na nuvem.',
+            );
+
+            return;
+        }
+
+        // Depois, mantém uma cópia local para a versão atual do jogo.
+        try {
+            localStorage.setItem(DRAFT_KEY, JSON.stringify(savedQuiz));
+
+            const previous = JSON.parse(
+            localStorage.getItem(SAVED_KEY) ?? '[]',
+            ) as QuizDefinition[];
+
+            const updated = [
+            ...previous.filter((item) => item.id !== savedQuiz.id),
+            savedQuiz,
+            ];
+
+            localStorage.setItem(SAVED_KEY, JSON.stringify(updated));
+
+            setQuiz(savedQuiz);
+            setIsSaved(true);
+            setNotice(
+            'Quiz salvo no Supabase e neste navegador! Você já pode preparar a sala.',
+            );
+        } catch (error: unknown) {
+            console.error(
+                'Erro ao salvar quiz no Supabase:',
+                JSON.stringify(error, Object.getOwnPropertyNames(error), 2),
+            );
+
+            const detalhes =
+                error instanceof Error
+                ? error.message
+                : JSON.stringify(error);
+
+            setError(
+                `Erro ao salvar na nuvem: ${detalhes || 'Verifique o Console (F12).'}`,
+            );
+        }
     }
-
-    if (!password.trim()) {
-      setError('Informe a senha de autorização.');
-      return;
-    }
-
-    const savedQuiz: QuizDefinition = {
-      ...quiz,
-      title: quiz.title.trim(),
-      hostName: quiz.hostName.trim(),
-      updatedAt: new Date().toISOString(),
-    };
-
-    try {
-      localStorage.setItem(DRAFT_KEY, JSON.stringify(savedQuiz));
-
-      const previous = JSON.parse(
-        localStorage.getItem(SAVED_KEY) ?? '[]',
-      ) as QuizDefinition[];
-
-      const updated = [
-        ...previous.filter((item) => item.id !== savedQuiz.id),
-        savedQuiz,
-      ];
-
-      localStorage.setItem(SAVED_KEY, JSON.stringify(updated));
-
-      setQuiz(savedQuiz);
-      setIsSaved(true);
-      setNotice('Quiz salvo! Agora você pode criar a sala de espera.');
-    } catch {
-      setError(
-        'Não foi possível salvar no navegador. Verifique o espaço disponível.',
-      );
-    }
-  }
 
   function createRoom() {
     if (!isSaved) {
