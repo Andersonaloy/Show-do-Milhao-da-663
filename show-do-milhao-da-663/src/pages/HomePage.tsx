@@ -31,7 +31,7 @@ function HomePage() {
 
         <h1 className="home-title">
           Preparado para
-          <span> valer um milhão?</span>
+          <span> disputar um milhão?</span>
         </h1>
 
         <p className="home-description">

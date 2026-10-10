@@ -1,4 +1,9 @@
-export type HairStyle = 'short' | 'spiky' | 'curly' | 'long' | 'bald';
+export type HairStyle =
+  | 'short-curly'
+  | 'long-curly'
+  | 'short-straight'
+  | 'long-straight'
+  | 'bald';
 
 export type FaceExpression =
   | 'happy'
@@ -21,7 +26,7 @@ export const defaultAvatar: AvatarAppearance = {
   skinColor: '#D99A6C',
   shirtColor: '#7543C4',
   hairColor: '#38251D',
-  hairStyle: 'short',
+  hairStyle: 'bald',
   expression: 'happy',
   glasses: false,
 };

@@ -91,7 +91,7 @@ function JoinRoomPage() {
                 id="playerName"
                 value={playerName}
                 onChange={(event) => setPlayerName(event.target.value)}
-                placeholder="Ex.: BimPlayer"
+                placeholder="Ex.: Fulano"
                 maxLength={24}
                 required
               />
@@ -157,10 +157,10 @@ function JoinRoomPage() {
                         updateAvatar('hairStyle', event.target.value as HairStyle)
                         }
                     >
-                        <option value="short">Curto</option>
-                        <option value="spiky">Espetado</option>
-                        <option value="curly">Cacheado</option>
-                        <option value="long">Comprido</option>
+                        <option value="short-curly">Cacheado curto</option>
+                        <option value="long-curly">Cacheado comprido</option>
+                        <option value="short-straight">Liso curto</option>
+                        <option value="long-straight">Liso comprido</option>
                         <option value="bald">Careca</option>
                     </select>
                     </div>
