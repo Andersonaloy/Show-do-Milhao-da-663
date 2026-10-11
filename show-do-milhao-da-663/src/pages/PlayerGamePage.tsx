@@ -5,6 +5,7 @@ import PlayerAvatar from '../components/PlayerAvatar';
 import { defaultAvatar, type AvatarAppearance, } from '../types/playerAvatar';
 import { supabase } from '../lib/supabaseClient';
 import { loadPlayerRoom, loadPlayerUsedHelps, submitPlayerAnswer, usePlayerHelp, type HelpType, type PlayerHelpResult, type PlayerUsedHelp, type PlayerRoomData, } from '../lib/roomRepository';
+import HelpModal from '../components/HelpModal';
 
 type RoomPlayer = {
   id: string;
@@ -37,9 +38,10 @@ function PlayerGamePage() {
   const [usedHelps, setUsedHelps] = useState<PlayerUsedHelp[]>([]);
   const [helpLoading, setHelpLoading] = useState(false);
   const [multiplayerHelpFeedback, setMultiplayerHelpFeedback] = useState('');
+  const [activeHelp, setActiveHelp] = useState<HelpType | null>(null);
   const [multiplayerConfirmationOpen, setMultiplayerConfirmationOpen] = useState(false);
   const [multiplayerScore, setMultiplayerScore] = useState<number | null>(null);
-  const [rankingRefresh] = useState(0);
+  const [rankingRefresh, setRankingRefresh] = useState(0);
   const [roomPlayers, setRoomPlayers] = useState<RoomPlayer[]>([]);
   const [finalRanking, setFinalRanking] = useState<RoomPlayer[]>([]);
   const [rankingLoading, setRankingLoading] = useState(false);
@@ -67,6 +69,7 @@ function PlayerGamePage() {
       return;
     }
 
+    setActiveHelp(helpType);
     setHelpLoading(true);
     setMultiplayerHelpFeedback('');
 
@@ -89,7 +92,7 @@ function PlayerGamePage() {
         setMultiplayerHelpFeedback(
           `💡 A resposta correta é: ${
             question.options[result.correct_option]
-          }. Se acertar, você ganhará 1 ponto.`,
+          }. Se acertar, você ganhará 2 pontos.`,
         );
       } else if (helpType === 'focus_points' && result.opinions) {
         const opinions = result.opinions
@@ -135,58 +138,62 @@ function PlayerGamePage() {
   }
 
   async function handleMultiplayerAnswer(
-        questionId: string,
-        selectedOption: number | null,
-        ) {
-        if (!roomCode || !roomData || answerSubmitting) return;
+    questionId: string,
+    selectedOption: number | null,
+  ) {
+    if (!roomCode || !roomData || answerSubmitting) return;
 
-        if (submittedQuestionId === questionId) return;
+    if (submittedQuestionId === questionId) return;
 
-        setAnswerSubmitting(true);
-        setMultiplayerFeedback('');
+    setAnswerSubmitting(true);
+    setMultiplayerFeedback('');
 
-        try {
-            const usedHelpForQuestion = usedHelps.some(
-              (help) => help.question_id === questionId,
-            );
+    try {
+      const result = await submitPlayerAnswer(
+        roomCode,
+        questionId,
+        selectedOption,
+        false,
+      );
 
-            const result = await submitPlayerAnswer(
-              roomCode,
-              questionId,
-              selectedOption,
-              usedHelpForQuestion,
-            );
+      setSubmittedQuestionId(questionId);
+      setMultiplayerSelectedOption(selectedOption);
+      setMultiplayerScore(result.total_score);
 
-            setSubmittedQuestionId(questionId);
-            setMultiplayerSelectedOption(selectedOption);
-            setMultiplayerScore(result.total_score);
+      if (selectedOption === null) {
+        setMultiplayerFeedback(
+          'Você pulou a pergunta. Não ganhou nem perdeu pontos.',
+        );
+      } else if (result.is_correct) {
+        const ganhouBonusVelocidade =
+          result.points_awarded === 5 ||
+          result.points_awarded === 3;
 
-            if (selectedOption === null) {
-            setMultiplayerFeedback(
-                'Você pulou a pergunta. Não ganhou nem perdeu pontos.',
-            );
-            } else if (result.is_correct) {
-            setMultiplayerFeedback(
-                `Resposta correta! Você ganhou ${result.points_awarded} ${
-                result.points_awarded === 1 ? 'ponto' : 'pontos'
-                }.`,
-            );
-            } else {
-            setMultiplayerFeedback(
-                `Resposta incorreta. Você perdeu ${Math.abs(
-                result.points_awarded,
-                )} ponto.`,
-            );
-            }
-        } catch (error: unknown) {
-            setMultiplayerFeedback(
-            error instanceof Error
-                ? error.message
-                : 'Não foi possível registrar sua resposta.',
-            );
-        } finally {
-            setAnswerSubmitting(false);
-        }
+        setMultiplayerFeedback(
+          ganhouBonusVelocidade
+            ? `Resposta correta e mais rápida! Você ganhou ${result.points_awarded} pontos, incluindo +1 ponto de bônus de velocidade!`
+            : `Resposta correta! Você ganhou ${result.points_awarded} pontos.`,
+        );
+      } else {
+        const pontosPerdidos = Math.abs(result.points_awarded);
+
+        setMultiplayerFeedback(
+          `Resposta incorreta. Você perdeu ${pontosPerdidos} ${
+            pontosPerdidos === 1 ? 'ponto' : 'pontos'
+          }.`,
+        );
+      }
+
+      setRankingRefresh((previous) => previous + 1);
+    } catch (error: unknown) {
+      setMultiplayerFeedback(
+        error instanceof Error
+          ? error.message
+          : 'Não foi possível registrar sua resposta.',
+      );
+    } finally {
+      setAnswerSubmitting(false);
+    }
   }
 
   function handleSelectMultiplayerAnswer(
@@ -336,14 +343,13 @@ function PlayerGamePage() {
           setUsedHelps(history);
         }
       } catch (error: unknown) {
-        if (isActive) {
-          setMultiplayerHelpFeedback(
-            error instanceof Error
-              ? `Não foi possível carregar suas ajudas: ${error.message}`
-              : 'Não foi possível carregar suas ajudas.',
-          );
+          if (isActive) {
+            console.error(
+              'Não foi possível carregar o histórico das ajudas:',
+              error,
+            );
+          }
         }
-      }
     }
 
     void loadHelps();
@@ -354,15 +360,21 @@ function PlayerGamePage() {
   }, [roomCode, roomData?.roomId]);
 
   useEffect(() => {
-      const questionId =
-        roomData?.quiz.questions[roomData.currentQuestion]?.id;
+    const questionId =
+      roomData?.quiz.questions[roomData.currentQuestion]?.id;
 
-      if (!questionId) return;
+    if (!questionId) return;
 
-      setMultiplayerSelectedOption(null);
-      setMultiplayerConfirmationOpen(false);
-      setMultiplayerFeedback('');
-    }, [roomData?.roomId, roomData?.currentQuestion]);
+    setMultiplayerSelectedOption(null);
+    setMultiplayerConfirmationOpen(false);
+    setMultiplayerFeedback('');
+
+    // Limpa a mensagem da ajuda ao mudar de pergunta.
+    setMultiplayerHelpFeedback('');
+
+    // Garante que a janela da ajuda anterior não fique aberta.
+    setActiveHelp(null);
+  }, [roomData?.roomId, roomData?.currentQuestion]);
 
   useEffect(() => {
     if (!roomData?.roomId) {
@@ -899,12 +911,6 @@ function PlayerGamePage() {
             </div>
           )}
 
-          {multiplayerFeedback && (
-            <div className="feedback" role="status">
-              {multiplayerFeedback}
-            </div>
-          )}
-
           <button
             className="button button-danger"
             style={{ marginTop: 16 }}
@@ -1037,6 +1043,15 @@ function PlayerGamePage() {
           </div>
         </aside>
       </div>
+
+      {activeHelp && (
+        <HelpModal
+          helpType={activeHelp}
+          loading={helpLoading}
+          feedback={multiplayerHelpFeedback}
+          onClose={() => setActiveHelp(null)}
+        />
+      )}
     </main>
   );
 }
