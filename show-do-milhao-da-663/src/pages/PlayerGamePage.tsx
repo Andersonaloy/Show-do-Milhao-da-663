@@ -74,6 +74,10 @@ function PlayerGamePage() {
   const [multiplayerSelectedOption, setMultiplayerSelectedOption] = useState<number | null>(null);
   const [multiplayerFeedback, setMultiplayerFeedback] = useState('');
   const [multiplayerScore, setMultiplayerScore] = useState<number | null>(null);
+  const [rankingRefresh, setRankingRefresh] = useState(0);
+  const [finalRanking, setFinalRanking] = useState< { id: string; player_name: string; score: number }[] >([]);
+  const [rankingLoading, setRankingLoading] = useState(false);
+  const [rankingError, setRankingError] = useState('');
 
   async function handleMultiplayerAnswer(
         questionId: string,
@@ -247,6 +251,51 @@ function PlayerGamePage() {
     };
   }, [roomCode]);
 
+  useEffect(() => {
+    if (roomData?.status !== 'finished' || !roomData.roomId) {
+      return;
+    }
+
+    let isActive = true;
+
+    async function loadFinalRanking() {
+      setRankingLoading(true);
+      setRankingError('');
+
+      try {
+        const { data, error } = await supabase
+          .from('room_players')
+          .select('id, player_name, score')
+          .eq('room_id', roomData!.roomId)
+          .order('score', { ascending: false })
+          .order('joined_at', { ascending: true });
+
+        if (error) throw error;
+
+        if (isActive) {
+          setFinalRanking(data ?? []);
+        }
+      } catch (error: unknown) {
+        if (isActive) {
+          setRankingError(
+            error instanceof Error
+              ? error.message
+              : 'Não foi possível carregar o ranking final.',
+          );
+        }
+      } finally {
+        if (isActive) {
+          setRankingLoading(false);
+        }
+      }
+    }
+
+    void loadFinalRanking();
+
+    return () => {
+      isActive = false;
+    };
+  }, [roomData?.status, roomData?.roomId, rankingRefresh]);
 
   const [quiz] = useState(() => loadQuiz(navigationState?.quizId));
   const [currentQuestion, setCurrentQuestion] = useState(0);
@@ -458,34 +507,94 @@ function PlayerGamePage() {
     }
 
     if (roomData.status === 'finished') {
-    return (
-        <main className="app-shell">
-        <header className="topbar">
-            <BrandLogo />
-        </header>
+        return (
+          <main className="app-shell">
+            <header className="topbar">
+              <BrandLogo />
+            </header>
 
-        <section className="panel lobby-center">
-            <span className="eyebrow">Fim de jogo</span>
-            <h1>Quiz concluído!</h1>
+            <section className="panel lobby-center">
+              <span className="eyebrow">Show do Milhão da 663</span>
 
-            <PlayerAvatar appearance={avatar} size={112} />
+              <h1>🏆 Resultado final</h1>
 
-            <h2>{playerName}</h2>
+              <p className="muted">
+                A partida terminou! Confira a classificação de todos os jogadores.
+              </p>
 
-            <p className="muted">
-            O anfitrião encerrou a partida.
-            </p>
+              <div
+                className="panel"
+                style={{
+                  width: '100%',
+                  maxWidth: 650,
+                  textAlign: 'left',
+                  marginTop: 20,
+                }}
+              >
+                <h2 style={{ textAlign: 'center' }}>
+                  Ranking da partida
+                </h2>
 
-            <button
-            className="button button-primary"
-            onClick={() => navigate('/')}
-            >
-            Voltar ao início
-            </button>
-        </section>
-        </main>
-    );
-    }
+                {rankingLoading ? (
+                  <p className="muted" role="status">
+                    Carregando classificação...
+                  </p>
+                ) : rankingError ? (
+                  <div>
+                    <p className="feedback error" role="alert">
+                      Não foi possível carregar o ranking.
+                    </p>
+
+                    <p className="muted">{rankingError}</p>
+
+                    <button
+                      className="button button-secondary"
+                      onClick={() => {
+                        setRoomData((current) =>
+                          current ? { ...current } : current,
+                        );
+                      }}
+                    >
+                      Atualizar tela
+                    </button>
+                  </div>
+                ) : finalRanking.length === 0 ? (
+                  <p className="muted">
+                    Nenhum jogador foi encontrado nesta partida.
+                  </p>
+                ) : (
+                  finalRanking.map((player, index) => (
+                    <div className="score-row" key={player.id}>
+                      <span>
+                        {index === 0
+                          ? '🥇'
+                          : index === 1
+                            ? '🥈'
+                            : index === 2
+                              ? '🥉'
+                              : `${index + 1}º`}{' '}
+                        {player.player_name}
+                      </span>
+
+                      <strong className="gold">
+                        {player.score} pts
+                      </strong>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <button
+                className="button button-primary"
+                style={{ marginTop: 20 }}
+                onClick={() => navigate('/')}
+              >
+                Voltar ao início
+              </button>
+            </section>
+          </main>
+        );
+      }
 
     const synchronizedQuestion =
     roomData.quiz.questions[roomData.currentQuestion];
