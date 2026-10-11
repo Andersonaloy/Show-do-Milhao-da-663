@@ -80,6 +80,7 @@ function PlayerGamePage() {
   const [submittedQuestionId, setSubmittedQuestionId] = useState<string | null>(null);
   const [multiplayerSelectedOption, setMultiplayerSelectedOption] = useState<number | null>(null);
   const [multiplayerFeedback, setMultiplayerFeedback] = useState('');
+  const [multiplayerConfirmationOpen, setMultiplayerConfirmationOpen] = useState(false);
   const [multiplayerScore, setMultiplayerScore] = useState<number | null>(null);
   const [rankingRefresh, setRankingRefresh] = useState(0);
   const [roomPlayers, setRoomPlayers] = useState<RoomPlayer[]>([]);
@@ -136,7 +137,20 @@ function PlayerGamePage() {
         } finally {
             setAnswerSubmitting(false);
         }
-    }
+  }
+
+  function handleSelectMultiplayerAnswer(
+      questionId: string,
+      selectedOption: number,
+  ) {
+      if (!roomData || answerSubmitting) return;
+
+      if (submittedQuestionId === questionId) return;
+
+      setMultiplayerSelectedOption(selectedOption);
+      setMultiplayerConfirmationOpen(true);
+      setMultiplayerFeedback('');
+  }
   
   useEffect(() => {
     if (!roomCode) {
@@ -258,6 +272,17 @@ function PlayerGamePage() {
       }
     };
   }, [roomCode]);
+
+  useEffect(() => {
+      const questionId =
+        roomData?.quiz.questions[roomData.currentQuestion]?.id;
+
+      if (!questionId) return;
+
+      setMultiplayerSelectedOption(null);
+      setMultiplayerConfirmationOpen(false);
+      setMultiplayerFeedback('');
+    }, [roomData?.roomId, roomData?.currentQuestion]);
 
   useEffect(() => {
     if (!roomData?.roomId) {
@@ -398,6 +423,7 @@ function PlayerGamePage() {
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [score, setScore] = useState(0);
+  const [showLocalConfirmation, setShowLocalConfirmation] = useState(false);
   const [answered, setAnswered] = useState(false);
   const [finished, setFinished] = useState(false);
   const [feedback, setFeedback] = useState('');
@@ -414,7 +440,16 @@ function PlayerGamePage() {
     if (answered || eliminatedAnswers.includes(index)) return;
 
     setSelectedAnswer(index);
+    setShowLocalConfirmation(true);
+  }
+
+  function confirmLocalAnswer() {
+    if (answered || selectedAnswer === null) return;
+
+    const index = selectedAnswer;
+
     setAnswered(true);
+    setShowLocalConfirmation(false);
 
     if (index === activeQuestion.correctAnswer) {
       const points = usedHelpThisQuestion ? 1 : 2;
@@ -434,6 +469,7 @@ function PlayerGamePage() {
   function handleSkip() {
     if (answered) return;
 
+    setShowLocalConfirmation(false);
     setAnswered(true);
     setSelectedAnswer(null);
     setFeedback('Você pulou a pergunta. Não ganhou nem perdeu pontos.');
@@ -502,6 +538,7 @@ function PlayerGamePage() {
     setSelectedAnswer(null);
     setAnswered(false);
     setFeedback('');
+    setShowLocalConfirmation(false);
     setUsedHelp([]);
     setEliminatedAnswers([]);
     setRevealedAnswer(false);
@@ -515,6 +552,7 @@ function PlayerGamePage() {
     setAnswered(false);
     setFinished(false);
     setFeedback('');
+    setShowLocalConfirmation(false);
     setUsedHelp([]);
     setEliminatedAnswers([]);
     setRevealedAnswer(false);
@@ -837,7 +875,7 @@ function PlayerGamePage() {
                             key={`${index}-${answer}`}
                             className={`answer-button ${isSelected ? 'selected' : ''}`}
                             onClick={() =>
-                            void handleMultiplayerAnswer(
+                            handleSelectMultiplayerAnswer(
                                 synchronizedQuestion.id,
                                 index,
                             )
@@ -852,6 +890,61 @@ function PlayerGamePage() {
                         );
                     })}
                 </div>
+
+                {multiplayerConfirmationOpen &&
+                  multiplayerSelectedOption !== null &&
+                  submittedQuestionId !== synchronizedQuestion.id && (
+                    <div className="panel" style={{ marginTop: 20 }}>
+                      <h2>Tem certeza da sua resposta?</h2>
+
+                      <p className="muted">
+                        Você selecionou:
+                      </p>
+
+                      <p>
+                        <strong>
+                          {String.fromCharCode(65 + multiplayerSelectedOption)}.{' '}
+                          {synchronizedQuestion.options[multiplayerSelectedOption]}
+                        </strong>
+                      </p>
+
+                      <p className="muted">
+                        Depois de confirmar, sua resposta será registrada.
+                      </p>
+
+                      <div
+                        style={{
+                          display: 'flex',
+                          flexWrap: 'wrap',
+                          gap: 12,
+                          marginTop: 16,
+                        }}
+                      >
+                        <button
+                          className="button button-secondary"
+                          onClick={() => setMultiplayerConfirmationOpen(false)}
+                          disabled={answerSubmitting}
+                        >
+                          Voltar e alterar
+                        </button>
+
+                        <button
+                          className="button button-primary"
+                          onClick={() => {
+                            void handleMultiplayerAnswer(
+                              synchronizedQuestion.id,
+                              multiplayerSelectedOption,
+                            );
+
+                            setMultiplayerConfirmationOpen(false);
+                          }}
+                          disabled={answerSubmitting}
+                        >
+                          Confirmar resposta
+                        </button>
+                      </div>
+                    </div>
+                )}
 
                 {answerSubmitting && (
                     <div className="feedback" role="status">
@@ -1106,6 +1199,44 @@ function PlayerGamePage() {
               </button>
             ))}
           </div>
+
+          {showLocalConfirmation && selectedAnswer !== null && (
+            <div className="panel" style={{ marginTop: 20 }}>
+              <h2>Tem certeza da sua resposta?</h2>
+
+              <p className="muted">Você selecionou:</p>
+
+              <p>
+                <strong>
+                  {String.fromCharCode(65 + selectedAnswer)}.{' '}
+                  {activeQuestion.options[selectedAnswer]}
+                </strong>
+              </p>
+
+              <div
+                style={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: 12,
+                  marginTop: 16,
+                }}
+              >
+                <button
+                  className="button button-secondary"
+                  onClick={() => setShowLocalConfirmation(false)}
+                >
+                  Voltar e alterar
+                </button>
+
+                <button
+                  className="button button-primary"
+                  onClick={confirmLocalAnswer}
+                >
+                  Confirmar resposta
+                </button>
+              </div>
+            </div>
+          )}
 
           {feedback && (
             <div className="feedback" role="status">
