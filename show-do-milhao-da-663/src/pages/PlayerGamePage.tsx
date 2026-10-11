@@ -3,7 +3,6 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import BrandLogo from '../components/BrandLogo';
 import PlayerAvatar from '../components/PlayerAvatar';
 import { defaultAvatar, type AvatarAppearance, } from '../types/playerAvatar';
-import type { QuizDefinition } from '../types/quiz';
 import { supabase } from '../lib/supabaseClient';
 import { loadPlayerRoom, submitPlayerAnswer, type PlayerRoomData, } from '../lib/roomRepository';
 
@@ -13,51 +12,6 @@ type RoomPlayer = {
   score: number;
   avatar: AvatarAppearance;
 };
-
-const QUIZZES_KEY = 'show663-saved-quizzes';
-
-const fallbackQuiz: QuizDefinition = {
-  id: 'quiz-demo',
-  title: 'Quiz de demonstração',
-  hostName: 'Anfitrião',
-  questionTime: 20,
-  updatedAt: '',
-  questions: [
-    {
-      id: 'pergunta-demo',
-      text: 'Qual é o maior planeta do Sistema Solar?',
-      options: ['Terra', 'Marte', 'Júpiter', 'Saturno'],
-      correctAnswer: 2,
-    },
-  ],
-};
-
-function loadQuiz(quizId?: string): QuizDefinition {
-  try {
-    const saved = localStorage.getItem(QUIZZES_KEY);
-
-    if (saved) {
-      const quizzes = JSON.parse(saved) as QuizDefinition[];
-
-      if (Array.isArray(quizzes) && quizzes.length > 0) {
-        if (quizId) {
-          const matchingQuiz = quizzes.find(
-            (item) => item.id === quizId,
-          );
-
-          if (matchingQuiz) return matchingQuiz;
-        }
-
-        // Demonstração local: usa o quiz salvo mais recentemente.
-        return quizzes[quizzes.length - 1];
-      }
-    }
-  } catch {
-    // Se não for possível ler o armazenamento, usa o quiz de demonstração.
-  }
-
-  return fallbackQuiz;
-}
 
 function PlayerGamePage() {
   const navigate = useNavigate();
@@ -419,146 +373,6 @@ function PlayerGamePage() {
     };
   }, [roomData?.status, roomData?.roomId, rankingRefresh]);
 
-  const [quiz] = useState(() => loadQuiz(navigationState?.quizId));
-  const [currentQuestion, setCurrentQuestion] = useState(0);
-  const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
-  const [score, setScore] = useState(0);
-  const [showLocalConfirmation, setShowLocalConfirmation] = useState(false);
-  const [answered, setAnswered] = useState(false);
-  const [finished, setFinished] = useState(false);
-  const [feedback, setFeedback] = useState('');
-  const [usedHelp, setUsedHelp] = useState<string[]>([]);
-  const [eliminatedAnswers, setEliminatedAnswers] = useState<number[]>([]);
-  const [revealedAnswer, setRevealedAnswer] = useState(false);
-  const [usedHelpThisQuestion, setUsedHelpThisQuestion] = useState(false);
-
-  const questions = quiz.questions;
-  const activeQuestion = questions[currentQuestion];
-  const questionCount = questions.length;
-
-  function handleAnswer(index: number) {
-    if (answered || eliminatedAnswers.includes(index)) return;
-
-    setSelectedAnswer(index);
-    setShowLocalConfirmation(true);
-  }
-
-  function confirmLocalAnswer() {
-    if (answered || selectedAnswer === null) return;
-
-    const index = selectedAnswer;
-
-    setAnswered(true);
-    setShowLocalConfirmation(false);
-
-    if (index === activeQuestion.correctAnswer) {
-      const points = usedHelpThisQuestion ? 1 : 2;
-
-      setScore((currentScore) => currentScore + points);
-      setFeedback(
-        `Resposta correta! Você ganhou ${points} ${
-          points === 1 ? 'ponto' : 'pontos'
-        }.`,
-      );
-    } else {
-      setScore((currentScore) => currentScore - 1);
-      setFeedback('Resposta incorreta. Você perdeu 1 ponto.');
-    }
-  }
-
-  function handleSkip() {
-    if (answered) return;
-
-    setShowLocalConfirmation(false);
-    setAnswered(true);
-    setSelectedAnswer(null);
-    setFeedback('Você pulou a pergunta. Não ganhou nem perdeu pontos.');
-  }
-
-  function useHelp(helpId: string, helpName: string) {
-    if (answered || usedHelp.includes(helpId)) return;
-
-    setUsedHelp((current) => [...current, helpId]);
-    setUsedHelpThisQuestion(true);
-
-    if (helpId === 'reveal') {
-      setRevealedAnswer(true);
-      setFeedback(
-        `Ajuda utilizada: a resposta correta é ${
-          activeQuestion.options[activeQuestion.correctAnswer]
-        }. Se acertar, você ganhará 1 ponto.`,
-      );
-      return;
-    }
-
-    if (helpId === 'characters') {
-      // Simula a opinião dos quatro personagens.
-      const correctIndex = activeQuestion.correctAnswer;
-      const votes = activeQuestion.options.map(() =>
-        Math.floor(Math.random() * 20) + 1,
-      );
-
-      votes[correctIndex] += 25;
-
-      const highestVote = votes.indexOf(Math.max(...votes));
-
-      setFeedback(
-        `${helpName}: os personagens votaram mais em "${
-          activeQuestion.options[highestVote]
-        }". É apenas uma sugestão!`,
-      );
-      return;
-    }
-
-    if (helpId === 'coin') {
-      const wrongOptions = activeQuestion.options
-        .map((_, index) => index)
-        .filter((index) => index !== activeQuestion.correctAnswer);
-
-      // Remove duas alternativas incorretas.
-      const shuffled = [...wrongOptions].sort(() => Math.random() - 0.5);
-      const eliminated = shuffled.slice(0, 2);
-
-      setEliminatedAnswers(eliminated);
-      setFeedback(
-        'Cara ou coroa: duas alternativas incorretas foram eliminadas!',
-      );
-    }
-  }
-
-  function handleNextQuestion() {
-    if (!answered) return;
-
-    if (currentQuestion + 1 >= questionCount) {
-      setFinished(true);
-      return;
-    }
-
-    setCurrentQuestion((current) => current + 1);
-    setSelectedAnswer(null);
-    setAnswered(false);
-    setFeedback('');
-    setShowLocalConfirmation(false);
-    setUsedHelp([]);
-    setEliminatedAnswers([]);
-    setRevealedAnswer(false);
-    setUsedHelpThisQuestion(false);
-  }
-
-  function handlePlayAgain() {
-    setCurrentQuestion(0);
-    setSelectedAnswer(null);
-    setScore(0);
-    setAnswered(false);
-    setFinished(false);
-    setFeedback('');
-    setShowLocalConfirmation(false);
-    setUsedHelp([]);
-    setEliminatedAnswers([]);
-    setRevealedAnswer(false);
-    setUsedHelpThisQuestion(false);
-  }
-
   if (roomLoading) {
     return (
         <main className="app-shell">
@@ -807,309 +621,20 @@ function PlayerGamePage() {
           </main>
         );
       }
-
-    const synchronizedQuestion =
+  const synchronizedQuestion =
     roomData.quiz.questions[roomData.currentQuestion];
 
-    if (roomData.status === 'playing') {
-    return (
-        <main className="app-shell">
-        <header className="topbar">
-            <BrandLogo />
-
-            <button
-            className="button button-secondary"
-            onClick={() => navigate('/')}
-            >
-            Sair da partida
-            </button>
-        </header>
-
-        <div className="game-topline" style={{ marginBottom: 24 }}>
-            <span className="eyebrow">Sala {roomData.roomCode}</span>
-
-            <span className="timer">
-            ⏱ {roomData.quiz.questionTime} segundos por pergunta
-            </span>
-        </div>
-
-        {!synchronizedQuestion ? (
-            <section className="panel lobby-center">
-            <h1>Pergunta não encontrada</h1>
-            <p className="muted">
-                Confira se o quiz possui perguntas salvas na nuvem.
-            </p>
-            </section>
-        ) : (
-            <div className="game-layout">
-            <section className="game-main">
-                <div className="panel">
-                <span className="eyebrow">
-                    Pergunta {roomData.currentQuestion + 1} de{' '}
-                    {roomData.quiz.questions.length}
-                </span>
-
-                <h1
-                    style={{
-                    fontSize: 'clamp(1.5rem, 4vw, 2.4rem)',
-                    marginTop: 18,
-                    }}
-                >
-                    {synchronizedQuestion.text}
-                </h1>
-
-                <p className="muted">
-                    Escolha uma alternativa. Sua resposta será registrada na nuvem.
-                </p>
-                </div>
-
-                <div className="answers-grid">
-                    {synchronizedQuestion.options.map((answer, index) => {
-                        const hasAnswered =
-                        submittedQuestionId === synchronizedQuestion.id;
-
-                        const isSelected = multiplayerSelectedOption === index;
-
-                        return (
-                        <button
-                            key={`${index}-${answer}`}
-                            className={`answer-button ${isSelected ? 'selected' : ''}`}
-                            onClick={() =>
-                            handleSelectMultiplayerAnswer(
-                                synchronizedQuestion.id,
-                                index,
-                            )
-                            }
-                            disabled={answerSubmitting || hasAnswered}
-                        >
-                            <span className="gold">
-                            {String.fromCharCode(65 + index)}.
-                            </span>{' '}
-                            {answer}
-                        </button>
-                        );
-                    })}
-                </div>
-
-                {multiplayerConfirmationOpen &&
-                  multiplayerSelectedOption !== null &&
-                  submittedQuestionId !== synchronizedQuestion.id && (
-                    <div className="panel" style={{ marginTop: 20 }}>
-                      <h2>Tem certeza da sua resposta?</h2>
-
-                      <p className="muted">
-                        Você selecionou:
-                      </p>
-
-                      <p>
-                        <strong>
-                          {String.fromCharCode(65 + multiplayerSelectedOption)}.{' '}
-                          {synchronizedQuestion.options[multiplayerSelectedOption]}
-                        </strong>
-                      </p>
-
-                      <p className="muted">
-                        Depois de confirmar, sua resposta será registrada.
-                      </p>
-
-                      <div
-                        style={{
-                          display: 'flex',
-                          flexWrap: 'wrap',
-                          gap: 12,
-                          marginTop: 16,
-                        }}
-                      >
-                        <button
-                          className="button button-secondary"
-                          onClick={() => setMultiplayerConfirmationOpen(false)}
-                          disabled={answerSubmitting}
-                        >
-                          Voltar e alterar
-                        </button>
-
-                        <button
-                          className="button button-primary"
-                          onClick={() => {
-                            void handleMultiplayerAnswer(
-                              synchronizedQuestion.id,
-                              multiplayerSelectedOption,
-                            );
-
-                            setMultiplayerConfirmationOpen(false);
-                          }}
-                          disabled={answerSubmitting}
-                        >
-                          Confirmar resposta
-                        </button>
-                      </div>
-                    </div>
-                )}
-
-                {answerSubmitting && (
-                    <div className="feedback" role="status">
-                        Registrando sua resposta...
-                    </div>
-                    )}
-
-                    {multiplayerFeedback && (
-                    <div className="feedback" role="status">
-                        {multiplayerFeedback}
-                    </div>
-                    )}
-
-                    {!answerSubmitting &&
-                    !multiplayerFeedback &&
-                    submittedQuestionId !== synchronizedQuestion.id && (
-                        <button
-                        className="button button-danger"
-                        onClick={() =>
-                            void handleMultiplayerAnswer(
-                            synchronizedQuestion.id,
-                            null,
-                            )
-                        }
-                        disabled={answerSubmitting}
-                        >
-                        Pular pergunta
-                        </button>
-                )}
-            </section>
-
-            <aside className="panel score-panel">
-                <h2>Seu perfil</h2>
-
-                <div className="game-player-profile">
-                <PlayerAvatar appearance={avatar} size={112} />
-                <strong>{playerName}</strong>
-                </div>
-
-                <div className="score-row">
-                    <span>Pontuação</span>
-                    <strong className="gold">
-                        {multiplayerScore ?? '—'}
-                    </strong>
-                </div>
-
-                <div className="score-row">
-                <span>Quiz</span>
-                <strong>{roomData.quiz.title}</strong>
-                </div>
-
-                <div className="score-row">
-                <span>Status</span>
-                <strong>Em andamento</strong>
-                </div>
-                <div style={{ marginTop: 24 }}>
-                  <h2>🏆 Jogadores da partida</h2>
-                  <div style={{ display: 'grid', gap: 14 }}>
-                    {[...roomPlayers]
-                      .sort((a, b) => b.score - a.score)
-                      .map((player, index) => (
-                        <div
-                          key={player.id}
-                          className="score-row"
-                          style={{ gap: 10 }}
-                        >
-                          <div
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: 10,
-                              minWidth: 0,
-                            }}
-                          >
-                            <PlayerAvatar
-                              appearance={player.avatar}
-                              size={44}
-                            />
-
-                            <div style={{ minWidth: 0 }}>
-                              <strong>
-                                {index + 1}º — {player.player_name}
-                              </strong>
-
-                              {player.player_name === playerName && (
-                                <div className="muted">Você</div>
-                              )}
-                            </div>
-                          </div>
-
-                          <strong className="gold">
-                            {player.score} pts
-                          </strong>
-                        </div>
-                      ))}
-                  </div>
-
-                  {roomPlayers.length === 0 && (
-                    <p className="muted">
-                      Carregando participantes...
-                    </p>
-                  )}
-                </div>
-            </aside>
-            </div>
-        )}
-        </main>
-    );
-  }
-
-  if (finished) {
+  if (!synchronizedQuestion) {
     return (
       <main className="app-shell">
         <header className="topbar">
           <BrandLogo />
-          <button
-            className="button button-secondary"
-            onClick={() => navigate('/')}
-          >
-            Sair
-          </button>
         </header>
 
         <section className="panel lobby-center">
-          <span className="eyebrow">Fim de jogo</span>
-          <h1>Quiz concluído!</h1>
-
-          <PlayerAvatar appearance={avatar} size={112} />
-
-          <h2>{playerName}</h2>
-
+          <h1>Pergunta indisponível</h1>
           <p className="muted">
-            Você respondeu às {questionCount} perguntas.
-          </p>
-
-          <div className="score-row">
-            <span>Pontuação final</span>
-            <strong className="gold">{score} pontos</strong>
-          </div>
-
-          <button
-            className="button button-primary"
-            onClick={handlePlayAgain}
-          >
-            Jogar novamente
-          </button>
-
-          <button
-            className="button button-secondary"
-            onClick={() => navigate('/')}
-          >
-            Voltar ao início
-          </button>
-        </section>
-      </main>
-    );
-  }
-
-  if (!activeQuestion) {
-    return (
-      <main className="app-shell">
-        <section className="panel lobby-center">
-          <h1>Nenhuma pergunta encontrada</h1>
-          <p className="muted">
-            Volte ao editor e salve um quiz com pelo menos uma pergunta.
+            Não foi possível encontrar a pergunta atual da partida.
           </p>
           <button
             className="button button-primary"
@@ -1121,12 +646,19 @@ function PlayerGamePage() {
       </main>
     );
   }
+
+  const displayedScore =
+    multiplayerScore ??
+    roomPlayers.find((player) => player.player_name === playerName)?.score ??
+    0;
+
+  const hasAnswered =
+    submittedQuestionId === synchronizedQuestion.id;
 
   return (
     <main className="app-shell">
       <header className="topbar">
         <BrandLogo />
-
         <button
           className="button button-secondary"
           onClick={() => navigate('/')}
@@ -1136,9 +668,10 @@ function PlayerGamePage() {
       </header>
 
       <div className="game-topline" style={{ marginBottom: 24 }}>
-        <span className="eyebrow">Sala {roomCode}</span>
+        <span className="eyebrow">Sala {roomData.roomCode}</span>
         <span className="timer">
-          ⏱ {quiz.questionTime} segundos por pergunta
+          Pergunta {roomData.currentQuestion + 1} de{' '}
+          {roomData.quiz.questions.length}
         </span>
       </div>
 
@@ -1146,7 +679,7 @@ function PlayerGamePage() {
         <section className="game-main">
           <div className="panel">
             <div className="eyebrow">
-              Pergunta {currentQuestion + 1} de {questionCount}
+              Show do Milhão da 663
             </div>
 
             <h1
@@ -1155,42 +688,29 @@ function PlayerGamePage() {
                 marginTop: 18,
               }}
             >
-              {activeQuestion.text}
+              {synchronizedQuestion.text}
             </h1>
 
             <p className="muted">
-              Escolha uma alternativa antes que o tempo termine.
+              Escolha sua resposta. Ela será registrada na partida
+              compartilhada.
             </p>
           </div>
 
           <div className="answers-grid">
-            {activeQuestion.options.map((answer, index) => (
+            {synchronizedQuestion.options.map((answer, index) => (
               <button
                 key={`${index}-${answer}`}
                 className={`answer-button ${
-                  selectedAnswer === index ? 'selected' : ''
-                } ${
-                  answered && index === activeQuestion.correctAnswer
-                    ? 'correct'
-                    : ''
-                } ${
-                  answered &&
-                  selectedAnswer === index &&
-                  index !== activeQuestion.correctAnswer
-                    ? 'wrong'
-                    : ''
-                } ${
-                  revealedAnswer && index === activeQuestion.correctAnswer
-                    ? 'correct'
-                    : ''
+                  multiplayerSelectedOption === index ? 'selected' : ''
                 }`}
-                onClick={() => handleAnswer(index)}
-                disabled={answered || eliminatedAnswers.includes(index)}
-                style={
-                  eliminatedAnswers.includes(index)
-                    ? { opacity: 0.35, textDecoration: 'line-through' }
-                    : undefined
+                onClick={() =>
+                  handleSelectMultiplayerAnswer(
+                    synchronizedQuestion.id,
+                    index,
+                  )
                 }
+                disabled={hasAnswered || answerSubmitting}
               >
                 <span className="gold">
                   {String.fromCharCode(65 + index)}.
@@ -1200,18 +720,20 @@ function PlayerGamePage() {
             ))}
           </div>
 
-          {showLocalConfirmation && selectedAnswer !== null && (
+          {multiplayerConfirmationOpen && !hasAnswered && (
             <div className="panel" style={{ marginTop: 20 }}>
-              <h2>Tem certeza da sua resposta?</h2>
+              <h2>Confirmar resposta?</h2>
 
               <p className="muted">Você selecionou:</p>
 
-              <p>
-                <strong>
-                  {String.fromCharCode(65 + selectedAnswer)}.{' '}
-                  {activeQuestion.options[selectedAnswer]}
-                </strong>
-              </p>
+              {multiplayerSelectedOption !== null && (
+                <p>
+                  <strong>
+                    {String.fromCharCode(65 + multiplayerSelectedOption)}.{' '}
+                    {synchronizedQuestion.options[multiplayerSelectedOption]}
+                  </strong>
+                </p>
+              )}
 
               <div
                 style={{
@@ -1223,77 +745,60 @@ function PlayerGamePage() {
               >
                 <button
                   className="button button-secondary"
-                  onClick={() => setShowLocalConfirmation(false)}
+                  disabled={answerSubmitting}
+                  onClick={() => {
+                    setMultiplayerConfirmationOpen(false);
+                    setMultiplayerSelectedOption(null);
+                  }}
                 >
                   Voltar e alterar
                 </button>
 
                 <button
                   className="button button-primary"
-                  onClick={confirmLocalAnswer}
+                  disabled={
+                    answerSubmitting || multiplayerSelectedOption === null
+                  }
+                  onClick={() => {
+                    setMultiplayerConfirmationOpen(false);
+                    void handleMultiplayerAnswer(
+                      synchronizedQuestion.id,
+                      multiplayerSelectedOption,
+                    );
+                  }}
                 >
-                  Confirmar resposta
+                  {answerSubmitting ? 'Registrando...' : 'Confirmar resposta'}
                 </button>
               </div>
             </div>
           )}
 
-          {feedback && (
+          {multiplayerFeedback && (
             <div className="feedback" role="status">
-              {feedback}
+              {multiplayerFeedback}
             </div>
           )}
 
-          {answered && (
-            <button
-              className="button button-primary button-full"
-              onClick={handleNextQuestion}
-            >
-              {currentQuestion + 1 >= questionCount
-                ? 'Ver resultado final →'
-                : 'Próxima pergunta →'}
-            </button>
-          )}
+          <button
+            className="button button-danger"
+            style={{ marginTop: 16 }}
+            disabled={hasAnswered || answerSubmitting}
+            onClick={() => {
+              void handleMultiplayerAnswer(
+                synchronizedQuestion.id,
+                null,
+              );
+            }}
+          >
+            Pular pergunta
+          </button>
 
-          <div className="panel stack">
+          <div className="panel stack" style={{ marginTop: 24 }}>
             <h2>Suas ajudas</h2>
-
-            <button
-              className="button button-secondary"
-              disabled={answered || usedHelp.includes('reveal')}
-              onClick={() => useHelp('reveal', 'Revelar resposta')}
-            >
-              💡 Revelar a resposta certa
-              {usedHelp.includes('reveal') ? ' — Usada' : ''}
-            </button>
-
-            <button
-              className="button button-secondary"
-              disabled={answered || usedHelp.includes('characters')}
-              onClick={() =>
-                useHelp('characters', 'Voto dos quatro personagens')
-              }
-            >
-              🗣️ Consultar os quatro personagens
-              {usedHelp.includes('characters') ? ' — Usada' : ''}
-            </button>
-
-            <button
-              className="button button-secondary"
-              disabled={answered || usedHelp.includes('coin')}
-              onClick={() => useHelp('coin', 'Cara ou coroa')}
-            >
-              🪙 Cara ou coroa
-              {usedHelp.includes('coin') ? ' — Usada' : ''}
-            </button>
-
-            <button
-              className="button button-danger"
-              disabled={answered}
-              onClick={handleSkip}
-            >
-              Pular pergunta
-            </button>
+            <p className="muted">
+              Vamos conectar as três ajudas à partida depois de confirmar
+              que a versão multiplayer está funcionando.
+            </p>
           </div>
         </section>
 
@@ -1307,28 +812,46 @@ function PlayerGamePage() {
 
           <div className="score-row">
             <span>Pontuação</span>
-            <strong className="gold">{score}</strong>
+            <strong className="gold">{displayedScore}</strong>
           </div>
 
           <div className="score-row">
             <span>Pergunta</span>
             <strong>
-              {currentQuestion + 1} / {questionCount}
+              {roomData.currentQuestion + 1} /{' '}
+              {roomData.quiz.questions.length}
             </strong>
           </div>
 
           <div className="score-row">
             <span>Quiz</span>
-            <strong>{quiz.title}</strong>
+            <strong>{roomData.quiz.title}</strong>
           </div>
 
-          <p
-            className="muted"
-            style={{ marginTop: 18, fontSize: '0.85rem' }}
-          >
-            Demonstração local: suas respostas e sua pontuação ainda não são
-            sincronizadas com outros jogadores.
-          </p>
+          <div className="panel" style={{ marginTop: 20 }}>
+            <h2>👥 Jogadores</h2>
+
+            {roomPlayers.map((player) => (
+              <div className="score-row" key={player.id}>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    minWidth: 0,
+                  }}
+                >
+                  <PlayerAvatar appearance={player.avatar} size={42} />
+                  <span>
+                    {player.player_name}
+                    {player.player_name === playerName ? ' (você)' : ''}
+                  </span>
+                </div>
+
+                <strong className="gold">{player.score} pts</strong>
+              </div>
+            ))}
+          </div>
         </aside>
       </div>
     </main>
