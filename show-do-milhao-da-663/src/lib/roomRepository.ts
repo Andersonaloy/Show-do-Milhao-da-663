@@ -2,61 +2,53 @@ import { supabase } from './supabaseClient';
 import { ensureAnonymousSession } from './anonymousAuth';
 import type { AvatarAppearance } from '../types/playerAvatar';
 
+
 export async function createRoomInSupabase(
   quizId: string,
+  password: string,
 ): Promise<string> {
-  const user = await ensureAnonymousSession();
+  await ensureAnonymousSession();
 
-  // Confirma que o quiz pertence ao usuário atual.
-  const { data: quiz, error: quizError } = await supabase
-    .from('quizzes')
-    .select('id')
-    .eq('id', quizId)
-    .eq('owner_id', user.id)
-    .single();
+  const { data, error } = await supabase.functions.invoke(
+    'rapid-function',
+    {
+      body: {
+        quizId,
+        password,
+      },
+    },
+  );
 
-  if (quizError || !quiz) {
+  if (error) {
+    console.error('Erro completo da Edge Function:', error);
+    console.error('Detalhes do erro:', error.context);
+
+    if (error.context instanceof Response) {
+      console.error('Status HTTP:', error.context.status);
+
+      const responseText = await error.context
+        .clone()
+        .text();
+
+      console.error('Resposta do servidor:', responseText);
+    }
+
+    throw new Error(error.message);
+  }
+
+  if (
+    !data ||
+    typeof data.roomCode !== 'string' ||
+    !data.roomCode
+  ) {
     throw new Error(
-      'Não foi possível encontrar seu quiz na nuvem. Salve-o novamente e tente criar a sala.',
+      'O Supabase não retornou o código da sala.',
     );
   }
 
-  const characters = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-
-  // Tenta gerar um código único de seis caracteres.
-  for (let attempt = 0; attempt < 5; attempt++) {
-    let roomCode = '';
-
-    for (let i = 0; i < 6; i++) {
-      roomCode += characters[
-        Math.floor(Math.random() * characters.length)
-      ];
-    }
-
-    const { error: roomError } = await supabase
-      .from('game_rooms')
-      .insert({
-        room_code: roomCode,
-        quiz_id: quizId,
-        host_id: user.id,
-        status: 'waiting',
-        current_question: 0,
-      });
-
-    if (!roomError) {
-      return roomCode;
-    }
-
-    // Se o código já existir, tenta gerar outro.
-    if (roomError.code !== '23505') {
-      throw roomError;
-    }
-  }
-
-  throw new Error(
-    'Não foi possível gerar um código exclusivo. Tente novamente.',
-  );
+  return data.roomCode;
 }
+
 
 export async function joinRoomInSupabase(
   roomCode: string,

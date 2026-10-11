@@ -241,38 +241,46 @@ function CreateRoomPage() {
     }
 
   async function createRoom() {
-        setError('');
-        setNotice('');
+    setError('');
+    setNotice('');
 
-        if (!isSaved) {
-            setError('Salve o quiz antes de criar a sala.');
-            return;
-        }
-
-        try {
-            const roomCode = await createRoomInSupabase(quiz.id);
-
-            navigate(`/anfitriao/${roomCode}`, {
-            state: {
-                hostName: quiz.hostName,
-                questionCount: quiz.questions.length,
-                questionTime: quiz.questionTime,
-                quizId: quiz.id,
-                quizTitle: quiz.title,
-            },
-            });
-        } catch (error: unknown) {
-            console.error('Erro ao criar sala no Supabase:', error);
-
-            const message =
-            error instanceof Error
-                ? error.message
-                : JSON.stringify(error);
-
-            setError(message || 'Não foi possível criar a sala na nuvem.');
-        }
+    if (!isSaved) {
+      setError('Salve o quiz antes de criar a sala.');
+      return;
     }
 
+    if (!password.trim()) {
+      setError('Informe a senha de autorização.');
+      return;
+    }
+
+    try {
+      const roomCode = await createRoomInSupabase(
+        quiz.id,
+        password,
+      );
+
+      navigate(`/anfitriao/${roomCode}`, {
+        state: {
+          hostName: quiz.hostName,
+          questionCount: quiz.questions.length,
+          questionTime: quiz.questionTime,
+          quizId: quiz.id,
+          quizTitle: quiz.title,
+        },
+      });
+    } catch (error: unknown) {
+      console.error('Erro ao criar sala no Supabase:', error);
+
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Não foi possível criar a sala na nuvem.';
+
+      setError(message);
+    }
+  }
+  
   const currentPreview = quiz.questions[previewIndex];
 
   return (
