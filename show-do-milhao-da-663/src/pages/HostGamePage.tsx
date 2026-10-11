@@ -1,8 +1,14 @@
-
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import BrandLogo from '../components/BrandLogo';
 import type { QuizDefinition } from '../types/quiz';
+import { supabase } from '../lib/supabaseClient';
+
+type RoomPlayer = {
+  id: string;
+  player_name: string;
+  score: number;
+};
 
 const QUIZZES_KEY = 'show663-saved-quizzes';
 
@@ -33,7 +39,7 @@ function loadSavedQuiz(quizId?: string): QuizDefinition | null {
 function HostGamePage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { roomCode } = useParams();
+  const { roomCode } = useParams<{ roomCode: string }>();
 
   const roomSettings = location.state as {
     hostName?: string;
@@ -52,36 +58,298 @@ function HostGamePage() {
   const [gameStarted, setGameStarted] = useState(false);
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [notice, setNotice] = useState('');
+  const [players, setPlayers] = useState<RoomPlayer[]>([]);
+  const [answeredCount, setAnsweredCount] = useState(0);
+  const [gameFinished, setGameFinished] = useState(false);
+
+  useEffect(() => {
+        if (!roomCode) {
+            return;
+        }
+
+        const code = roomCode.toUpperCase();
+
+        let isActive = true;
+
+        let roomChannel:
+            | ReturnType<typeof supabase.channel>
+            | null = null;
+
+        async function connectToRoom() {
+            try {
+            // Busca a sala pelo código exibido na tela.
+            const { data: room, error: roomError } = await supabase
+                .from('game_rooms')
+                .select('id')
+                .eq('room_code', code)
+                .maybeSingle();
+
+                if (roomError) {
+                    throw roomError;
+                }
+
+                if (!room) {
+                    throw new Error('Sala não encontrada. Verifique o código da sala.');
+                }
+
+                const roomId = room.id;
+
+            // Busca os jogadores registrados nessa sala.
+            async function loadPlayers() {
+                const { data, error } = await supabase
+                .from('room_players')
+                .select('id, player_name, score')
+                .eq('room_id', roomId)
+                .order('joined_at', { ascending: true });
+
+                if (error) {
+                throw error;
+                }
+
+                if (isActive) {
+                setPlayers(data ?? []);
+                }
+            }
+
+            // Carrega a lista assim que o anfitrião abre a tela.
+            await loadPlayers();
+
+            if (!isActive) {
+                return;
+            }
+
+            // Escuta alterações na lista de jogadores.
+            roomChannel = supabase
+                .channel(`host-room-${roomId}`)
+                .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'room_players',
+                    filter: `room_id=eq.${roomId}`,
+                },
+                () => {
+                    void loadPlayers().catch((error: unknown) => {
+                    console.error(
+                        'Erro ao atualizar os jogadores:',
+                        error,
+                    );
+                    });
+                },
+                )
+                .subscribe((status) => {
+                if (status === 'CHANNEL_ERROR') {
+                    console.error(
+                    'Não foi possível conectar às atualizações em tempo real.',
+                    );
+                }
+                });
+            } catch (error: unknown) {
+            console.error(
+                'Erro ao carregar a sala e seus jogadores:',
+                error,
+            );
+
+            if (isActive) {
+                setNotice(
+                error instanceof Error
+                    ? error.message
+                    : 'Não foi possível carregar os jogadores da sala.',
+                );
+            }
+            }
+        }
+
+        void connectToRoom();
+
+        return () => {
+            isActive = false;
+
+            if (roomChannel) {
+            void supabase.removeChannel(roomChannel);
+            }
+        };
+    }, [roomCode]);
+
+    useEffect(() => {
+        if (!roomCode || !gameStarted) return;
+
+        let isActive = true;
+        let intervalId: ReturnType<typeof setInterval> | null = null;
+
+        async function loadAnswerCount() {
+            try {
+            const { data: room, error: roomError } = await supabase
+                .from('game_rooms')
+                .select('id, quiz_id')
+                .eq('room_code', roomCode!.toUpperCase())
+                .maybeSingle();
+
+            if (roomError) throw roomError;
+            if (!room) throw new Error('Sala não encontrada.');
+
+            const { data: questions, error: questionsError } = await supabase
+                .from('quiz_questions')
+                .select('id')
+                .eq('quiz_id', room.quiz_id)
+                .order('position', { ascending: true })
+                .range(currentQuestion, currentQuestion);
+
+            if (questionsError) throw questionsError;
+
+            const question = questions?.[0];
+
+            if (!question) {
+                if (isActive) setAnsweredCount(0);
+                return;
+            }
+
+            const { count, error: answersError } = await supabase
+                .from('player_answers')
+                .select('id', { count: 'exact', head: true })
+                .eq('question_id', question.id);
+
+            if (answersError) throw answersError;
+
+            if (isActive) {
+                setAnsweredCount(count ?? 0);
+            }
+            } catch (error) {
+            console.error('Erro ao consultar respostas:', error);
+            }
+        }
+
+        void loadAnswerCount();
+
+        intervalId = setInterval(() => {
+            void loadAnswerCount();
+        }, 2000);
+
+        return () => {
+            isActive = false;
+
+            if (intervalId !== null) {
+            clearInterval(intervalId);
+            }
+        };
+    }, [roomCode, currentQuestion, gameStarted]);
+
 
   const activeQuestion = quiz?.questions[currentQuestion];
 
-  function handleStartGame() {
-    if (!quiz || quiz.questions.length === 0) {
-      setNotice(
-        'Não foi possível carregar as perguntas. Volte ao editor e salve o quiz novamente.',
-      );
-      return;
+  async function updateRoom(
+        updates: {
+            status?: 'waiting' | 'playing' | 'finished';
+            current_question?: number;
+        },
+        ) {
+        if (!roomCode) {
+            throw new Error('Código da sala não encontrado.');
+        }
+
+        const { error } = await supabase
+            .from('game_rooms')
+            .update(updates)
+            .eq('room_code', roomCode.toUpperCase());
+
+        if (error) {
+            throw error;
+        }
     }
 
-    setCurrentQuestion(0);
-    setNotice('');
-    setGameStarted(true);
-  }
+  async function handleStartGame() {
+        if (!quiz || quiz.questions.length === 0) {
+            setNotice(
+            'Não foi possível carregar as perguntas. Volte ao editor e salve o quiz novamente.',
+            );
+            return;
+        }
 
-  function handleNextQuestion() {
-    if (!quiz) {
-      return;
+        try {
+            setNotice('');
+
+            await updateRoom({
+            status: 'playing',
+            current_question: 0,
+            });
+
+            setCurrentQuestion(0);
+            setGameStarted(true);
+        } catch (error: unknown) {
+            console.error('Erro ao iniciar o quiz:', error);
+
+            setNotice(
+            error instanceof Error
+                ? `Não foi possível iniciar o quiz: ${error.message}`
+                : 'Não foi possível iniciar o quiz. Tente novamente.',
+            );
+        }
     }
 
-    if (currentQuestion + 1 >= quiz.questions.length) {
-      setGameStarted(false);
-      setNotice('Quiz concluído! O ranking será implementado em uma próxima etapa.');
-      return;
+  async function handleNextQuestion() {
+        if (!quiz) {
+            return;
+        }
+
+        try {
+            setNotice('');
+
+            // Se estamos na última pergunta, finalizamos a partida.
+            if (currentQuestion + 1 >= quiz.questions.length) {
+                await updateRoom({
+                    status: 'finished',
+                });
+
+                setGameStarted(false);
+                setGameFinished(true);
+                setNotice('');
+
+                return;
+            }
+
+            // Calcula o índice da próxima pergunta.
+            const nextQuestion = currentQuestion + 1;
+
+            // Atualiza a pergunta no Supabase para todos os jogadores.
+            await updateRoom({
+            current_question: nextQuestion,
+            });
+
+            // Atualiza também a tela do anfitrião.
+            setCurrentQuestion(nextQuestion);
+        } catch (error: unknown) {
+            console.error('Erro ao avançar a pergunta:', error);
+
+            setNotice(
+            error instanceof Error
+                ? `Não foi possível avançar a pergunta: ${error.message}`
+                : 'Não foi possível avançar a pergunta. Tente novamente.',
+            );
+        }
     }
 
-    setCurrentQuestion((current) => current + 1);
-    setNotice('');
-  }
+    async function handleEndGame() {
+        try {
+            setNotice('');
+
+            await updateRoom({
+                status: 'finished',
+            });
+
+            setGameStarted(false);
+            setGameFinished(true);
+            setNotice('');
+        } catch (error: unknown) {
+            console.error('Erro ao encerrar o quiz:', error);
+
+            setNotice(
+            error instanceof Error
+                ? `Não foi possível encerrar o quiz: ${error.message}`
+                : 'Não foi possível encerrar o quiz. Tente novamente.',
+            );
+        }
+    }
 
   return (
     <main className="app-shell">
@@ -96,7 +364,69 @@ function HostGamePage() {
         </button>
       </header>
 
-      {!gameStarted ? (
+      
+
+      {gameFinished ? (
+        <section className="panel lobby-center">
+            <span className="eyebrow">Show do Milhão da 663</span>
+
+            <h1>🏆 Resultado final</h1>
+
+            <p className="muted">
+            A partida terminou! Confira a classificação de todos os jogadores.
+            </p>
+
+            <div
+            className="panel"
+            style={{
+                width: '100%',
+                maxWidth: 650,
+                textAlign: 'left',
+                marginTop: 20,
+            }}
+            >
+            <h2 style={{ textAlign: 'center' }}>
+                Ranking da partida
+            </h2>
+
+            {[...players]
+                .sort((a, b) => b.score - a.score)
+                .map((player, index) => (
+                <div className="score-row" key={player.id}>
+                    <span>
+                    {index === 0
+                        ? '🥇'
+                        : index === 1
+                        ? '🥈'
+                        : index === 2
+                            ? '🥉'
+                            : `${index + 1}º`}{' '}
+                    {player.player_name}
+                    </span>
+
+                    <strong className="gold">
+                    {player.score} pts
+                    </strong>
+                </div>
+                ))}
+
+            {players.length === 0 && (
+                <p className="muted">
+                Nenhum jogador foi encontrado nesta partida.
+                </p>
+            )}
+            </div>
+
+            <button
+            className="button button-primary"
+            style={{ marginTop: 20 }}
+            onClick={() => navigate('/')}
+            >
+            Voltar ao início
+            </button>
+        </section>
+
+      ) : !gameStarted ? (
         <section className="panel lobby-center">
           <span className="eyebrow">Painel do anfitrião</span>
 
@@ -129,8 +459,31 @@ function HostGamePage() {
             </div>
 
             <div className="score-row">
-              <span>Jogadores conectados</span>
-              <strong>0</strong>
+                <span>Jogadores conectados</span>
+                <strong>{players.length}</strong>
+                </div>
+
+                <div style={{ marginTop: 16 }}>
+                <h3>Jogadores na sala</h3>
+
+                {players.length === 0 ? (
+                    <p className="muted">
+                    Aguardando jogadores entrarem...
+                    </p>
+                ) : (
+                    <ul style={{ paddingLeft: 22 }}>
+                    {[...players]
+                        .sort((a, b) => b.score - a.score)
+                        .map((player, index) => (
+                        <li key={player.id} style={{ marginBottom: 8 }} >
+                        <strong>{index + 1}º</strong> — {player.player_name}
+                            <span style={{ marginLeft: 8 }} className="gold">
+                                {player.score} pts
+                            </span>
+                        </li>
+                    ))}
+                    </ul>
+                )}
             </div>
           </div>
 
@@ -156,8 +509,7 @@ function HostGamePage() {
           </button>
 
           <p className="muted">
-            Esta etapa funciona como demonstração local. Os jogadores ainda
-            não estão conectados em tempo real.
+            Os jogadores conectados acompanham o andamento da partida automaticamente.
           </p>
         </section>
       ) : (
@@ -213,8 +565,30 @@ function HostGamePage() {
             </div>
 
             <div className="score-row">
-              <span>Jogadores</span>
-              <strong>0</strong>
+                <span>Jogadores</span>
+                <strong>{players.length}</strong>
+            </div>
+
+            <div className="score-row">
+                <span>Já responderam</span>
+                <strong>
+                    {answeredCount}/{players.length}
+                </strong>
+            </div>
+
+            <div style={{ marginTop: 20 }}>
+                <h3>🏆 Ranking ao vivo</h3>
+
+                {[...players]
+                    .sort((a, b) => b.score - a.score)
+                    .map((player, index) => (
+                    <div className="score-row" key={player.id}>
+                        <span>
+                        {index + 1}º — {player.player_name}
+                        </span>
+                        <strong className="gold">{player.score} pts</strong>
+                    </div>
+                    ))}
             </div>
 
             <button
@@ -230,10 +604,7 @@ function HostGamePage() {
             <button
               className="button button-danger button-full"
               style={{ marginTop: 10 }}
-              onClick={() => {
-                setGameStarted(false);
-                setNotice('Quiz encerrado pelo anfitrião.');
-              }}
+              onClick={handleEndGame}
             >
               Encerrar quiz
             </button>
