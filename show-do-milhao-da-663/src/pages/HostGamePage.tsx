@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import BrandLogo from '../components/BrandLogo';
 import PlayerAvatar from '../components/PlayerAvatar';
@@ -64,6 +64,10 @@ function HostGamePage() {
   const [players, setPlayers] = useState<RoomPlayer[]>([]);
   const [answeredCount, setAnsweredCount] = useState(0);
   const [gameFinished, setGameFinished] = useState(false);
+  const [questionStartedAt, setQuestionStartedAt] = useState<string | null>(null);
+  const [remainingSeconds, setRemainingSeconds] = useState(questionTime);
+
+  const advancingRef = useRef(false);
 
   useEffect(() => {
         if (!roomCode) {
@@ -185,89 +189,162 @@ function HostGamePage() {
     }, [roomCode]);
 
     useEffect(() => {
-        if (!roomCode || !gameStarted) return;
+      if (!roomCode || !gameStarted) {
+        return;
+      }
 
-        let isActive = true;
-        let intervalId: ReturnType<typeof setInterval> | null = null;
+      let isActive = true;
+      let intervalId: ReturnType<typeof setInterval> | null = null;
 
-        async function loadAnswerCount() {
-            try {
-            const { data: room, error: roomError } = await supabase
-                .from('game_rooms')
-                .select('id, quiz_id')
-                .eq('room_code', roomCode!.toUpperCase())
-                .maybeSingle();
+      async function loadAnswerCount() {
+        try {
+          // 1. Buscar a sala e o quiz.
+          const { data: room, error: roomError } = await supabase
+            .from('game_rooms')
+            .select('id, quiz_id')
+            .eq('room_code', roomCode!.toUpperCase())
+            .maybeSingle();
 
-            if (roomError) throw roomError;
-            if (!room) throw new Error('Sala não encontrada.');
+          if (roomError) throw roomError;
+          if (!room) throw new Error('Sala não encontrada.');
 
-            const { data: questions, error: questionsError } = await supabase
-                .from('quiz_questions')
-                .select('id')
-                .eq('quiz_id', room.quiz_id)
-                .order('position', { ascending: true })
-                .range(currentQuestion, currentQuestion);
+          // 2. Buscar a pergunta atual.
+          const { data: questions, error: questionsError } = await supabase
+            .from('quiz_questions')
+            .select('id')
+            .eq('quiz_id', room.quiz_id)
+            .order('position', { ascending: true })
+            .range(currentQuestion, currentQuestion);
 
-            if (questionsError) throw questionsError;
+          if (questionsError) throw questionsError;
 
-            const question = questions?.[0];
+          const question = questions?.[0];
 
-            if (!question) {
-                if (isActive) setAnsweredCount(0);
-                return;
-            }
+          if (!question) {
+            if (isActive) setAnsweredCount(0);
+            return;
+          }
 
-            const { count, error: answersError } = await supabase
-                .from('player_answers')
-                .select('id', { count: 'exact', head: true })
-                .eq('question_id', question.id);
+          // 3. Buscar somente os jogadores desta sala.
+          const { data: roomPlayers, error: playersError } = await supabase
+            .from('room_players')
+            .select('id')
+            .eq('room_id', room.id);
 
-            if (answersError) throw answersError;
+          if (playersError) throw playersError;
 
-            if (isActive) {
-                setAnsweredCount(count ?? 0);
-            }
-            } catch (error) {
-            console.error('Erro ao consultar respostas:', error);
-            }
+          const playerIds = (roomPlayers ?? []).map((player) => player.id);
+
+          if (!isActive) return;
+
+          // Não avançar automaticamente se não houver jogadores.
+          if (playerIds.length === 0) {
+            setAnsweredCount(0);
+            return;
+          }
+
+          // 4. Buscar as respostas desses jogadores para esta pergunta.
+          const { data: answers, error: answersError } = await supabase
+            .from('player_answers')
+            .select('player_id')
+            .eq('question_id', question.id)
+            .in('player_id', playerIds);
+
+          if (answersError) throw answersError;
+          if (!isActive) return;
+
+          // Contar jogadores únicos que responderam.
+          const answeredPlayerIds = new Set(
+            (answers ?? []).map((answer) => answer.player_id),
+          );
+
+          const count = answeredPlayerIds.size;
+
+          setAnsweredCount(count);
+
+          // 5. Se todos responderam, avançar sem esperar o tempo acabar.
+          if (count >= playerIds.length) {
+            void handleNextQuestion();
+          }
+        } catch (error: unknown) {
+          console.error('Erro ao consultar respostas:', error);
         }
+      }
 
+      void loadAnswerCount();
+
+      intervalId = setInterval(() => {
         void loadAnswerCount();
+      }, 2000);
 
-        intervalId = setInterval(() => {
-            void loadAnswerCount();
-        }, 2000);
+      return () => {
+        isActive = false;
 
-        return () => {
-            isActive = false;
+        if (intervalId !== null) {
+          clearInterval(intervalId);
+        }
+      };
+    }, [roomCode, currentQuestion, gameStarted, players]);
 
-            if (intervalId !== null) {
-            clearInterval(intervalId);
-            }
-        };
-    }, [roomCode, currentQuestion, gameStarted]);
+    useEffect(() => {
+      if (!gameStarted || !questionStartedAt) {
+        return;
+      }
+
+      const updateTimer = () => {
+        const startedAt = new Date(questionStartedAt).getTime();
+        const elapsedSeconds = Math.floor(
+          (Date.now() - startedAt) / 1000,
+        );
+
+        const remaining = Math.max(
+          0,
+          questionTime - elapsedSeconds,
+        );
+
+        setRemainingSeconds(remaining);
+
+        if (remaining <= 0) {
+          void handleNextQuestion();
+        }
+      };
+
+      updateTimer();
+
+      const intervalId = window.setInterval(updateTimer, 250);
+
+      return () => {
+        window.clearInterval(intervalId);
+      };
+    }, [
+      gameStarted,
+      questionStartedAt,
+      questionTime,
+      currentQuestion,
+    ]);
 
 
   const activeQuestion = quiz?.questions[currentQuestion];
 
   async function updateRoom(
-        updates: {
-            status?: 'waiting' | 'playing' | 'finished';
-            current_question?: number;
-        },
-        ) {
-        if (!roomCode) {
-            throw new Error('Código da sala não encontrado.');
-        }
+    updates: {
+      status?: 'waiting' | 'playing' | 'finished';
+      current_question?: number;
+      question_started_at?: string | null;
+    },
+  ) {
+    if (!roomCode) {
+      throw new Error('Código da sala não encontrado.');
+    }
 
-        const { error } = await supabase
-            .from('game_rooms')
-            .update(updates)
-            .eq('room_code', roomCode.toUpperCase());
+    const { error } = await supabase
+      .from('game_rooms')
+      .update(updates)
+      .eq('room_code', roomCode.toUpperCase());
 
-        if (error) {
-            throw error;
-        }
+    if (error) {
+      throw error;
+    }
   }
 
   async function handleReturnToHome() {
@@ -319,11 +396,17 @@ function HostGamePage() {
         try {
             setNotice('');
 
+            const startedAt = new Date().toISOString();
+
             await updateRoom({
-            status: 'playing',
-            current_question: 0,
+              status: 'playing',
+              current_question: 0,
+              question_started_at: startedAt,
             });
 
+            setQuestionStartedAt(startedAt);
+            setRemainingSeconds(questionTime);
+            setAnsweredCount(0);
             setCurrentQuestion(0);
             setGameStarted(true);
         } catch (error: unknown) {
@@ -338,46 +421,55 @@ function HostGamePage() {
     }
 
   async function handleNextQuestion() {
-        if (!quiz) {
-            return;
-        }
-
-        try {
-            setNotice('');
-
-            // Se estamos na última pergunta, finalizamos a partida.
-            if (currentQuestion + 1 >= quiz.questions.length) {
-                await updateRoom({
-                    status: 'finished',
-                });
-
-                setGameStarted(false);
-                setGameFinished(true);
-                setNotice('');
-
-                return;
-            }
-
-            // Calcula o índice da próxima pergunta.
-            const nextQuestion = currentQuestion + 1;
-
-            // Atualiza a pergunta no Supabase para todos os jogadores.
-            await updateRoom({
-            current_question: nextQuestion,
-            });
-
-            // Atualiza também a tela do anfitrião.
-            setCurrentQuestion(nextQuestion);
-        } catch (error: unknown) {
-            console.error('Erro ao avançar a pergunta:', error);
-
-            setNotice(
-            error instanceof Error
-                ? `Não foi possível avançar a pergunta: ${error.message}`
-                : 'Não foi possível avançar a pergunta. Tente novamente.',
-            );
-        }
+    if (!quiz || advancingRef.current) {
+      return;
     }
+
+    advancingRef.current = true;
+
+    try {
+      setNotice('');
+
+      // Se esta era a última pergunta, finalizar a partida.
+      if (currentQuestion + 1 >= questionCount) {
+        await updateRoom({
+          status: 'finished',
+          question_started_at: null,
+        });
+
+        setQuestionStartedAt(null);
+        setGameStarted(false);
+        setGameFinished(true);
+        setRemainingSeconds(0);
+
+        return;
+      }
+
+      // Preparar a próxima pergunta.
+      const nextQuestion = currentQuestion + 1;
+      const startedAt = new Date().toISOString();
+
+      await updateRoom({
+        status: 'playing',
+        current_question: nextQuestion,
+        question_started_at: startedAt,
+      });
+
+      setQuestionStartedAt(startedAt);
+      setRemainingSeconds(questionTime);
+      setAnsweredCount(0);
+      setCurrentQuestion(nextQuestion);
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Não foi possível avançar a pergunta.';
+
+      setNotice(message);
+    } finally {
+      advancingRef.current = false;
+    }
+  }
 
     async function handleEndGame() {
         try {
@@ -611,7 +703,7 @@ function HostGamePage() {
             <div className="game-topline">
               <span className="eyebrow">Quiz em andamento</span>
               <span className="timer">
-                ⏱ {questionTime} segundos por pergunta
+                ⏱ {remainingSeconds}s restantes
               </span>
             </div>
 
