@@ -268,7 +268,45 @@ function HostGamePage() {
         if (error) {
             throw error;
         }
+  }
+
+  async function handleReturnToHome() {
+    if (!roomCode) {
+      setNotice('Não foi possível identificar a sala.');
+      return;
     }
+
+    try {
+      setNotice('');
+
+      const { data, error } = await supabase
+        .from('game_rooms')
+        .delete()
+        .eq('room_code', roomCode.toUpperCase())
+        .select('id');
+
+      if (error) {
+        throw error;
+      }
+
+      if (!data || data.length === 0) {
+        throw new Error(
+          'A sala não foi excluída. Verifique as permissões do Supabase.',
+        );
+      }
+
+      // Só volta ao início depois de confirmar a exclusão.
+      navigate('/');
+    } catch (error: unknown) {
+      console.error('Erro ao excluir a sala:', error);
+
+      setNotice(
+        error instanceof Error
+          ? `Não foi possível excluir a sala: ${error.message}`
+          : 'Não foi possível excluir a sala. Tente novamente.',
+      );
+    }
+  }
 
   async function handleStartGame() {
         if (!quiz || quiz.questions.length === 0) {
@@ -443,12 +481,18 @@ function HostGamePage() {
             )}
             </div>
 
+            {notice && (
+              <div className="feedback" role="alert">
+                {notice}
+              </div>
+            )}
+
             <button
-            className="button button-primary"
-            style={{ marginTop: 20 }}
-            onClick={() => navigate('/')}
+              className="button button-primary"
+              style={{ marginTop: 20 }}
+              onClick={handleReturnToHome}
             >
-            Voltar ao início
+              Voltar ao início
             </button>
         </section>
 
