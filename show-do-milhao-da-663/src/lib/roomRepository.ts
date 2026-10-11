@@ -237,6 +237,36 @@ export async function submitPlayerAnswer(
   return result as PlayerAnswerResult;
 }
 
+export async function loadPlayerAnswerFeedback(
+  roomCode: string,
+  questionId: string,
+): Promise<number> {
+  const { data, error } = await supabase.rpc(
+    'get_player_answer_feedback',
+    {
+      p_room_code: roomCode.trim().toUpperCase(),
+      p_question_id: questionId,
+    },
+  );
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const result = data?.[0];
+
+  if (
+    !result ||
+    typeof result.correct_option !== 'number'
+  ) {
+    throw new Error(
+      'Não foi possível carregar a resposta correta.',
+    );
+  }
+
+  return result.correct_option;
+}
+
 export async function usePlayerHelp(
   roomCode: string,
   questionId: string,

@@ -4,8 +4,7 @@ import BrandLogo from '../components/BrandLogo';
 import PlayerAvatar from '../components/PlayerAvatar';
 import { defaultAvatar, type AvatarAppearance, } from '../types/playerAvatar';
 import { supabase } from '../lib/supabaseClient';
-import { loadPlayerRoom, loadPlayerUsedHelps, submitPlayerAnswer, usePlayerHelp, type HelpType, type PlayerHelpResult, type PlayerUsedHelp, type PlayerRoomData, } from '../lib/roomRepository';
-import HelpModal from '../components/HelpModal';
+import { loadPlayerRoom, loadPlayerUsedHelps, loadPlayerAnswerFeedback, submitPlayerAnswer, usePlayerHelp, type HelpType, type PlayerHelpResult, type PlayerUsedHelp, type PlayerRoomData, } from '../lib/roomRepository';import HelpModal from '../components/HelpModal';
 
 type RoomPlayer = {
   id: string;
@@ -47,6 +46,12 @@ function PlayerGamePage() {
   const [rankingLoading, setRankingLoading] = useState(false);
   const [rankingError, setRankingError] = useState('');
   const [remainingSeconds, setRemainingSeconds] = useState(0);
+
+  const [answerFeedback, setAnswerFeedback] = useState<{
+    questionId: string;
+    correctOption: number | null;
+    isCorrect: boolean | null;
+  } | null>(null);
 
   async function handleUseMultiplayerHelp(helpType: HelpType) {
     if (!roomCode || !roomData || helpLoading) return;
@@ -161,6 +166,12 @@ function PlayerGamePage() {
       setMultiplayerSelectedOption(selectedOption);
       setMultiplayerScore(result.total_score);
 
+      setAnswerFeedback({
+        questionId,
+        correctOption: null,
+        isCorrect: result.is_correct,
+      });
+
       if (selectedOption === null) {
         setMultiplayerFeedback(
           'Você pulou a pergunta. Não ganhou nem perdeu pontos.',
@@ -182,6 +193,24 @@ function PlayerGamePage() {
           `Resposta incorreta. Você perdeu ${pontosPerdidos} ${
             pontosPerdidos === 1 ? 'ponto' : 'pontos'
           }.`,
+        );
+      }
+
+      try {
+        const correctOption = await loadPlayerAnswerFeedback(
+          roomCode,
+          questionId,
+        );
+
+        setAnswerFeedback({
+          questionId,
+          correctOption,
+          isCorrect: result.is_correct,
+        });
+      } catch (feedbackError: unknown) {
+        console.error(
+          'Não foi possível revelar a resposta correta:',
+          feedbackError,
         );
       }
 
@@ -836,6 +865,11 @@ function PlayerGamePage() {
   const hasAnswered =
     submittedQuestionId === synchronizedQuestion.id;
 
+  const currentAnswerFeedback =
+  answerFeedback?.questionId === synchronizedQuestion.id
+    ? answerFeedback
+    : null;
+
   return (
     <main className="app-shell">
       <header className="topbar">
@@ -895,27 +929,63 @@ function PlayerGamePage() {
           </div>
 
           <div className="answers-grid">
-            {synchronizedQuestion.options.map((answer, index) => (
-              <button
-                key={`${index}-${answer}`}
-                className={`answer-button ${
-                  multiplayerSelectedOption === index ? 'selected' : ''
-                }`}
-                onClick={() =>
-                  handleSelectMultiplayerAnswer(
-                    synchronizedQuestion.id,
-                    index,
-                  )
+            {synchronizedQuestion.options.map((answer, index) => {
+              let answerStyle: React.CSSProperties | undefined;
+
+              if (hasAnswered && currentAnswerFeedback) {
+                if (currentAnswerFeedback.correctOption === index) {
+                  // A resposta correta fica verde.
+                  answerStyle = {
+                    borderColor: '#22c55e',
+                    backgroundColor: 'rgba(34, 197, 94, 0.16)',
+                    color: '#86efac',
+                  };
+                } else if (
+                  multiplayerSelectedOption === index &&
+                  currentAnswerFeedback.isCorrect === false
+                ) {
+                  // A resposta escolhida e errada fica vermelha.
+                  answerStyle = {
+                    borderColor: '#ef4444',
+                    backgroundColor: 'rgba(239, 68, 68, 0.16)',
+                    color: '#fca5a5',
+                  };
                 }
-                disabled={hasAnswered || answerSubmitting}
-              >
-                <span className="gold">
-                  {String.fromCharCode(65 + index)}.
-                </span>{' '}
-                {answer}
-              </button>
-            ))}
+              }
+
+              return (
+                <button
+                  key={`${index}-${answer}`}
+                  className={`answer-button ${
+                    multiplayerSelectedOption === index ? 'selected' : ''
+                  }`}
+                  style={answerStyle}
+                  onClick={() =>
+                    handleSelectMultiplayerAnswer(
+                      synchronizedQuestion.id,
+                      index,
+                    )
+                  }
+                  disabled={hasAnswered || answerSubmitting}
+                >
+                  <span className="gold">
+                    {String.fromCharCode(65 + index)}.
+                  </span>{' '}
+                  {answer}
+                </button>
+              );
+            })}
           </div>
+
+          {hasAnswered && multiplayerFeedback && (
+            <div
+              className="feedback"
+              role="status"
+              style={{ marginTop: 16 }}
+            >
+              {multiplayerFeedback}
+            </div>
+          )}
 
           {multiplayerConfirmationOpen && !hasAnswered && (
             <div className="panel" style={{ marginTop: 20 }}>
