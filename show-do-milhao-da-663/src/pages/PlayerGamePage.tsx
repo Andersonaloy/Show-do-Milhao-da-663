@@ -46,6 +46,7 @@ function PlayerGamePage() {
   const [finalRanking, setFinalRanking] = useState<RoomPlayer[]>([]);
   const [rankingLoading, setRankingLoading] = useState(false);
   const [rankingError, setRankingError] = useState('');
+  const [remainingSeconds, setRemainingSeconds] = useState(0);
 
   async function handleUseMultiplayerHelp(helpType: HelpType) {
     if (!roomCode || !roomData || helpLoading) return;
@@ -466,6 +467,48 @@ function PlayerGamePage() {
   }, [roomData?.roomId]);
 
   useEffect(() => {
+    if (
+      !roomData ||
+      roomData.status !== 'playing' ||
+      !roomData.questionStartedAt
+    ) {
+      setRemainingSeconds(0);
+      return;
+    }
+
+    const startedAt = roomData.questionStartedAt;
+    const durationSeconds = roomData.quiz.questionTime;
+
+    const updateRemainingTime = () => {
+      const elapsedSeconds = Math.floor(
+        (Date.now() - new Date(startedAt).getTime()) / 1000,
+      );
+
+      const remaining = Math.max(
+        0,
+        durationSeconds - elapsedSeconds,
+      );
+
+      setRemainingSeconds(remaining);
+    };
+
+    updateRemainingTime();
+
+    const intervalId = window.setInterval(
+      updateRemainingTime,
+      250,
+    );
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [
+    roomData?.status,
+    roomData?.questionStartedAt,
+    roomData?.quiz.questionTime,
+  ]);
+
+  useEffect(() => {
     if (roomData?.status !== 'finished' || !roomData.roomId) {
       return;
     }
@@ -805,11 +848,27 @@ function PlayerGamePage() {
         </button>
       </header>
 
-      <div className="game-topline" style={{ marginBottom: 24 }}>
-        <span className="eyebrow">Sala {roomData.roomCode}</span>
+      <div
+        className="game-topline"
+        style={{ marginBottom: 24 }}
+      >
+        <span className="eyebrow">
+          Sala {roomData.roomCode}
+        </span>
+
         <span className="timer">
           Pergunta {roomData.currentQuestion + 1} de{' '}
           {roomData.quiz.questions.length}
+        </span>
+
+        <span
+          className="timer"
+          style={{
+            color: remainingSeconds <= 5 ? '#ef4444' : 'inherit',
+            fontWeight: 700,
+          }}
+        >
+          ⏱ {remainingSeconds}s
         </span>
       </div>
 

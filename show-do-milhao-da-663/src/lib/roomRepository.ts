@@ -100,6 +100,7 @@ export type PlayerRoomData = {
   roomCode: string;
   status: 'waiting' | 'playing' | 'finished';
   currentQuestion: number;
+  questionStartedAt: string | null;
   quiz: {
     id: string;
     title: string;
@@ -135,6 +136,7 @@ export async function loadPlayerRoom(
       room_code,
       status,
       current_question,
+      question_started_at,
       quizzes (
         id,
         title,
@@ -185,6 +187,7 @@ export async function loadPlayerRoom(
     roomCode: data.room_code,
     status: data.status as PlayerRoomData['status'],
     currentQuestion: data.current_question,
+    questionStartedAt: data.question_started_at,
     quiz: {
       id: quiz.id,
       title: quiz.title,
