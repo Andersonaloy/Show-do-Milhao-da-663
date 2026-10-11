@@ -7,6 +7,13 @@ import type { QuizDefinition } from '../types/quiz';
 import { supabase } from '../lib/supabaseClient';
 import { loadPlayerRoom, submitPlayerAnswer, type PlayerRoomData, } from '../lib/roomRepository';
 
+type RoomPlayer = {
+  id: string;
+  player_name: string;
+  score: number;
+  avatar: AvatarAppearance;
+};
+
 const QUIZZES_KEY = 'show663-saved-quizzes';
 
 const fallbackQuiz: QuizDefinition = {
@@ -75,7 +82,8 @@ function PlayerGamePage() {
   const [multiplayerFeedback, setMultiplayerFeedback] = useState('');
   const [multiplayerScore, setMultiplayerScore] = useState<number | null>(null);
   const [rankingRefresh, setRankingRefresh] = useState(0);
-  const [finalRanking, setFinalRanking] = useState< { id: string; player_name: string; score: number }[] >([]);
+  const [roomPlayers, setRoomPlayers] = useState<RoomPlayer[]>([]);
+  const [finalRanking, setFinalRanking] = useState<RoomPlayer[]>([]);
   const [rankingLoading, setRankingLoading] = useState(false);
   const [rankingError, setRankingError] = useState('');
 
@@ -252,6 +260,95 @@ function PlayerGamePage() {
   }, [roomCode]);
 
   useEffect(() => {
+    if (!roomData?.roomId) {
+      return;
+    }
+
+    const roomId = roomData.roomId;
+    let isActive = true;
+    let isRefreshing = false;
+
+    let playersChannel: ReturnType<typeof supabase.channel> | null = null;
+    let refreshInterval: ReturnType<typeof setInterval> | null = null;
+
+    async function loadRoomPlayers() {
+      if (isRefreshing || !isActive) return;
+
+      isRefreshing = true;
+
+      try {
+        const { data, error } = await supabase
+          .from('room_players')
+          .select('id, player_name, score, avatar')
+          .eq('room_id', roomId)
+          .order('joined_at', { ascending: true });
+
+        if (error) throw error;
+
+        if (isActive) {
+          const formattedPlayers: RoomPlayer[] = (data ?? []).map(
+            (player) => ({
+              id: player.id,
+              player_name: player.player_name,
+              score: player.score,
+              avatar:
+                (player.avatar as unknown as AvatarAppearance | null) ??
+                defaultAvatar,
+            }),
+          );
+
+          setRoomPlayers(formattedPlayers);
+        }
+      } catch (error: unknown) {
+        console.error('Erro ao carregar participantes:', error);
+      } finally {
+        isRefreshing = false;
+      }
+    }
+
+    // Carrega os participantes assim que a sala é identificada.
+    void loadRoomPlayers();
+
+    // Atualiza a lista quando um participante entra, sai ou muda de pontuação.
+    playersChannel = supabase
+      .channel(`player-list-${roomId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'room_players',
+          filter: `room_id=eq.${roomId}`,
+        },
+        () => {
+          void loadRoomPlayers();
+        },
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          void loadRoomPlayers();
+        }
+      });
+
+    // Alternativa caso alguma atualização em tempo real não seja recebida.
+    refreshInterval = setInterval(() => {
+      void loadRoomPlayers();
+    }, 3000);
+
+    return () => {
+      isActive = false;
+
+      if (refreshInterval !== null) {
+        clearInterval(refreshInterval);
+      }
+
+      if (playersChannel) {
+        void supabase.removeChannel(playersChannel);
+      }
+    };
+  }, [roomData?.roomId]);
+
+  useEffect(() => {
     if (roomData?.status !== 'finished' || !roomData.roomId) {
       return;
     }
@@ -265,7 +362,7 @@ function PlayerGamePage() {
       try {
         const { data, error } = await supabase
           .from('room_players')
-          .select('id, player_name, score')
+          .select('id, player_name, score, avatar')
           .eq('room_id', roomData!.roomId)
           .order('score', { ascending: false })
           .order('joined_at', { ascending: true });
@@ -496,6 +593,59 @@ function PlayerGamePage() {
             <span className="gold">●</span> Conectado à sala
             </div>
 
+            <div
+              className="panel"
+              style={{
+                width: '100%',
+                maxWidth: 650,
+                textAlign: 'left',
+                marginTop: 20,
+              }}
+            >
+              <h2 style={{ textAlign: 'center' }}>
+                👥 Jogadores na sala ({roomPlayers.length})
+              </h2>
+
+              {roomPlayers.length === 0 ? (
+                <p className="muted">
+                  Aguardando participantes...
+                </p>
+              ) : (
+                <div style={{ display: 'grid', gap: 12 }}>
+                  {roomPlayers.map((player) => (
+                    <div
+                      key={player.id}
+                      className="score-row"
+                      style={{ gap: 12 }}
+                    >
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 12,
+                          minWidth: 0,
+                        }}
+                      >
+                        <PlayerAvatar
+                          appearance={player.avatar}
+                          size={52}
+                        />
+
+                        <div>
+                          <strong>{player.player_name}</strong>
+                          <div className="muted">
+                            {player.player_name === playerName
+                              ? 'Você'
+                              : 'Participante'}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             {roomError && (
             <p className="muted" role="status">
                 Aviso: {roomError}
@@ -564,17 +714,41 @@ function PlayerGamePage() {
                   </p>
                 ) : (
                   finalRanking.map((player, index) => (
-                    <div className="score-row" key={player.id}>
-                      <span>
-                        {index === 0
-                          ? '🥇'
-                          : index === 1
-                            ? '🥈'
-                            : index === 2
-                              ? '🥉'
-                              : `${index + 1}º`}{' '}
-                        {player.player_name}
-                      </span>
+                    <div
+                      className="score-row"
+                      key={player.id}
+                      style={{ gap: 12 }}
+                    >
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 12,
+                          minWidth: 0,
+                        }}
+                      >
+                        <PlayerAvatar
+                          appearance={player.avatar}
+                          size={48}
+                        />
+
+                        <div>
+                          <strong>
+                            {index === 0
+                              ? '🥇'
+                              : index === 1
+                                ? '🥈'
+                                : index === 2
+                                  ? '🥉'
+                                  : `${index + 1}º`}{' '}
+                            {player.player_name}
+                          </strong>
+
+                          {player.player_name === playerName && (
+                            <div className="muted">Você</div>
+                          )}
+                        </div>
+                      </div>
 
                       <strong className="gold">
                         {player.score} pts
@@ -732,6 +906,54 @@ function PlayerGamePage() {
                 <div className="score-row">
                 <span>Status</span>
                 <strong>Em andamento</strong>
+                </div>
+                <div style={{ marginTop: 24 }}>
+                  <h2>🏆 Jogadores da partida</h2>
+                  <div style={{ display: 'grid', gap: 14 }}>
+                    {[...roomPlayers]
+                      .sort((a, b) => b.score - a.score)
+                      .map((player, index) => (
+                        <div
+                          key={player.id}
+                          className="score-row"
+                          style={{ gap: 10 }}
+                        >
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 10,
+                              minWidth: 0,
+                            }}
+                          >
+                            <PlayerAvatar
+                              appearance={player.avatar}
+                              size={44}
+                            />
+
+                            <div style={{ minWidth: 0 }}>
+                              <strong>
+                                {index + 1}º — {player.player_name}
+                              </strong>
+
+                              {player.player_name === playerName && (
+                                <div className="muted">Você</div>
+                              )}
+                            </div>
+                          </div>
+
+                          <strong className="gold">
+                            {player.score} pts
+                          </strong>
+                        </div>
+                      ))}
+                  </div>
+
+                  {roomPlayers.length === 0 && (
+                    <p className="muted">
+                      Carregando participantes...
+                    </p>
+                  )}
                 </div>
             </aside>
             </div>

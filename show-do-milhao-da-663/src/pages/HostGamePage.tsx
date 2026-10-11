@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import BrandLogo from '../components/BrandLogo';
+import PlayerAvatar from '../components/PlayerAvatar';
+import { defaultAvatar, type AvatarAppearance, } from '../types/playerAvatar';
 import type { QuizDefinition } from '../types/quiz';
 import { supabase } from '../lib/supabaseClient';
 
@@ -8,6 +10,7 @@ type RoomPlayer = {
   id: string;
   player_name: string;
   score: number;
+  avatar: AvatarAppearance;
 };
 
 const QUIZZES_KEY = 'show663-saved-quizzes';
@@ -96,19 +99,28 @@ function HostGamePage() {
 
             // Busca os jogadores registrados nessa sala.
             async function loadPlayers() {
-                const { data, error } = await supabase
+              const { data, error } = await supabase
                 .from('room_players')
-                .select('id, player_name, score')
+                .select('id, player_name, score, avatar')
                 .eq('room_id', roomId)
                 .order('joined_at', { ascending: true });
 
-                if (error) {
+              if (error) {
                 throw error;
-                }
+              }
 
-                if (isActive) {
-                setPlayers(data ?? []);
-                }
+              if (isActive) {
+                const formattedPlayers: RoomPlayer[] = (data ?? []).map((player) => ({
+                  id: player.id,
+                  player_name: player.player_name,
+                  score: player.score,
+                  avatar:
+                    (player.avatar as unknown as AvatarAppearance | null) ??
+                    defaultAvatar,
+                }));
+
+                setPlayers(formattedPlayers);
+              }
             }
 
             // Carrega a lista assim que o anfitrião abre a tela.
@@ -390,25 +402,39 @@ function HostGamePage() {
             </h2>
 
             {[...players]
-                .sort((a, b) => b.score - a.score)
-                .map((player, index) => (
-                <div className="score-row" key={player.id}>
+              .sort((a, b) => b.score - a.score)
+              .map((player, index) => (
+                <div
+                  className="score-row"
+                  key={player.id}
+                  style={{ gap: 10 }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 10,
+                    }}
+                  >
+                    <PlayerAvatar appearance={player.avatar} size={44} />
+
                     <span>
-                    {index === 0
+                      {index === 0
                         ? '🥇'
                         : index === 1
-                        ? '🥈'
-                        : index === 2
+                          ? '🥈'
+                          : index === 2
                             ? '🥉'
                             : `${index + 1}º`}{' '}
-                    {player.player_name}
+                      {player.player_name}
                     </span>
+                  </div>
 
-                    <strong className="gold">
+                  <strong className="gold">
                     {player.score} pts
-                    </strong>
+                  </strong>
                 </div>
-                ))}
+            ))}
 
             {players.length === 0 && (
                 <p className="muted">
@@ -471,18 +497,41 @@ function HostGamePage() {
                     Aguardando jogadores entrarem...
                     </p>
                 ) : (
-                    <ul style={{ paddingLeft: 22 }}>
-                    {[...players]
+                    <div style={{ display: 'grid', gap: 12 }}>
+                      {[...players]
                         .sort((a, b) => b.score - a.score)
                         .map((player, index) => (
-                        <li key={player.id} style={{ marginBottom: 8 }} >
-                        <strong>{index + 1}º</strong> — {player.player_name}
-                            <span style={{ marginLeft: 8 }} className="gold">
-                                {player.score} pts
-                            </span>
-                        </li>
-                    ))}
-                    </ul>
+                          <div
+                            key={player.id}
+                            className="score-row"
+                            style={{ justifyContent: 'space-between', gap: 12 }}
+                          >
+                            <div
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 12,
+                                minWidth: 0,
+                              }}
+                            >
+                              <PlayerAvatar appearance={player.avatar} size={48} />
+
+                              <div>
+                                <strong>
+                                  {index + 1}º — {player.player_name}
+                                </strong>
+                                <div className="muted">
+                                  Participante da sala
+                                </div>
+                              </div>
+                            </div>
+
+                            <strong className="gold">
+                              {player.score} pts
+                            </strong>
+                          </div>
+                        ))}
+                    </div>
                 )}
             </div>
           </div>
@@ -580,15 +629,33 @@ function HostGamePage() {
                 <h3>🏆 Ranking ao vivo</h3>
 
                 {[...players]
-                    .sort((a, b) => b.score - a.score)
-                    .map((player, index) => (
-                    <div className="score-row" key={player.id}>
+                  .sort((a, b) => b.score - a.score)
+                  .map((player, index) => (
+                    <div
+                      className="score-row"
+                      key={player.id}
+                      style={{ gap: 10 }}
+                    >
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 8,
+                          minWidth: 0,
+                        }}
+                      >
+                        <PlayerAvatar appearance={player.avatar} size={36} />
+
                         <span>
-                        {index + 1}º — {player.player_name}
+                          {index + 1}º — {player.player_name}
                         </span>
-                        <strong className="gold">{player.score} pts</strong>
+                      </div>
+
+                      <strong className="gold">
+                        {player.score} pts
+                      </strong>
                     </div>
-                    ))}
+                ))}
             </div>
 
             <button
