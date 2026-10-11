@@ -4,7 +4,7 @@ import BrandLogo from '../components/BrandLogo';
 import PlayerAvatar from '../components/PlayerAvatar';
 import { defaultAvatar, type AvatarAppearance, } from '../types/playerAvatar';
 import { supabase } from '../lib/supabaseClient';
-import { loadPlayerRoom, submitPlayerAnswer, type PlayerRoomData, } from '../lib/roomRepository';
+import { loadPlayerRoom, loadPlayerUsedHelps, submitPlayerAnswer, usePlayerHelp, type HelpType, type PlayerHelpResult, type PlayerUsedHelp, type PlayerRoomData, } from '../lib/roomRepository';
 
 type RoomPlayer = {
   id: string;
@@ -34,13 +34,105 @@ function PlayerGamePage() {
   const [submittedQuestionId, setSubmittedQuestionId] = useState<string | null>(null);
   const [multiplayerSelectedOption, setMultiplayerSelectedOption] = useState<number | null>(null);
   const [multiplayerFeedback, setMultiplayerFeedback] = useState('');
+  const [usedHelps, setUsedHelps] = useState<PlayerUsedHelp[]>([]);
+  const [helpLoading, setHelpLoading] = useState(false);
+  const [multiplayerHelpFeedback, setMultiplayerHelpFeedback] = useState('');
   const [multiplayerConfirmationOpen, setMultiplayerConfirmationOpen] = useState(false);
   const [multiplayerScore, setMultiplayerScore] = useState<number | null>(null);
-  const [rankingRefresh, setRankingRefresh] = useState(0);
+  const [rankingRefresh] = useState(0);
   const [roomPlayers, setRoomPlayers] = useState<RoomPlayer[]>([]);
   const [finalRanking, setFinalRanking] = useState<RoomPlayer[]>([]);
   const [rankingLoading, setRankingLoading] = useState(false);
   const [rankingError, setRankingError] = useState('');
+
+  async function handleUseMultiplayerHelp(helpType: HelpType) {
+    if (!roomCode || !roomData || helpLoading) return;
+
+    const question =
+      roomData.quiz.questions[roomData.currentQuestion];
+
+    if (!question) return;
+
+    if (submittedQuestionId === question.id) {
+      setMultiplayerHelpFeedback(
+        'Você já respondeu a esta pergunta.',
+      );
+      return;
+    }
+
+    if (usedHelps.some((help) => help.help_type === helpType)) {
+      setMultiplayerHelpFeedback(
+        'Você já utilizou esta ajuda nesta partida.',
+      );
+      return;
+    }
+
+    setHelpLoading(true);
+    setMultiplayerHelpFeedback('');
+
+    try {
+      const result: PlayerHelpResult = await usePlayerHelp(
+        roomCode,
+        question.id,
+        helpType,
+      );
+
+      const savedHelp: PlayerUsedHelp = {
+        help_type: helpType,
+        question_id: question.id,
+        result,
+      };
+
+      setUsedHelps((current) => [...current, savedHelp]);
+
+      if (helpType === 'leader' && result.correct_option !== undefined) {
+        setMultiplayerHelpFeedback(
+          `💡 A resposta correta é: ${
+            question.options[result.correct_option]
+          }. Se acertar, você ganhará 1 ponto.`,
+        );
+      } else if (helpType === 'focus_points' && result.opinions) {
+        const opinions = result.opinions
+          .map(
+            (opinion) =>
+              `Personagem ${opinion.character}: ${
+                question.options[opinion.selected_option]
+              }`,
+          )
+          .join(' | ');
+
+        setMultiplayerHelpFeedback(`🗣️ ${opinions}`);
+      } else if (helpType === 'coin') {
+        if (
+          result.outcome === 'cara' &&
+          result.correct_option !== undefined
+        ) {
+          setMultiplayerHelpFeedback(
+            `🪙 Deu cara! A resposta certa é: ${
+              question.options[result.correct_option]
+            }.`,
+          );
+        } else if (
+          result.outcome === 'coroa' &&
+          result.wrong_option !== undefined
+        ) {
+          setMultiplayerHelpFeedback(
+            `🪙 Deu coroa! Uma resposta errada é: ${
+              question.options[result.wrong_option]
+            }.`,
+          );
+        }
+      }
+    } catch (error: unknown) {
+      setMultiplayerHelpFeedback(
+        error instanceof Error
+          ? error.message
+          : 'Não foi possível utilizar esta ajuda.',
+      );
+    } finally {
+      setHelpLoading(false);
+    }
+  }
 
   async function handleMultiplayerAnswer(
         questionId: string,
@@ -54,11 +146,15 @@ function PlayerGamePage() {
         setMultiplayerFeedback('');
 
         try {
+            const usedHelpForQuestion = usedHelps.some(
+              (help) => help.question_id === questionId,
+            );
+
             const result = await submitPlayerAnswer(
-            roomCode,
-            questionId,
-            selectedOption,
-            false,
+              roomCode,
+              questionId,
+              selectedOption,
+              usedHelpForQuestion,
             );
 
             setSubmittedQuestionId(questionId);
@@ -226,6 +322,36 @@ function PlayerGamePage() {
       }
     };
   }, [roomCode]);
+
+  useEffect(() => {
+    if (!roomCode || !roomData?.roomId) return;
+
+    let isActive = true;
+
+    async function loadHelps() {
+      try {
+        const history = await loadPlayerUsedHelps(roomCode!);
+
+        if (isActive) {
+          setUsedHelps(history);
+        }
+      } catch (error: unknown) {
+        if (isActive) {
+          setMultiplayerHelpFeedback(
+            error instanceof Error
+              ? `Não foi possível carregar suas ajudas: ${error.message}`
+              : 'Não foi possível carregar suas ajudas.',
+          );
+        }
+      }
+    }
+
+    void loadHelps();
+
+    return () => {
+      isActive = false;
+    };
+  }, [roomCode, roomData?.roomId]);
 
   useEffect(() => {
       const questionId =
@@ -795,10 +921,67 @@ function PlayerGamePage() {
 
           <div className="panel stack" style={{ marginTop: 24 }}>
             <h2>Suas ajudas</h2>
+
             <p className="muted">
-              Vamos conectar as três ajudas à partida depois de confirmar
-              que a versão multiplayer está funcionando.
+              Cada ajuda pode ser utilizada uma única vez durante a partida.
             </p>
+
+            <button
+              className="button button-secondary"
+              disabled={
+                hasAnswered ||
+                helpLoading ||
+                usedHelps.some((help) => help.help_type === 'leader')
+              }
+              onClick={() => void handleUseMultiplayerHelp('leader')}
+            >
+              💡 Revelar a resposta certa
+              {usedHelps.some((help) => help.help_type === 'leader')
+                ? ' — Usada'
+                : ''}
+            </button>
+
+            <button
+              className="button button-secondary"
+              disabled={
+                hasAnswered ||
+                helpLoading ||
+                usedHelps.some((help) => help.help_type === 'focus_points')
+              }
+              onClick={() => void handleUseMultiplayerHelp('focus_points')}
+            >
+              🗣️ Consultar os quatro personagens
+              {usedHelps.some((help) => help.help_type === 'focus_points')
+                ? ' — Usada'
+                : ''}
+            </button>
+
+            <button
+              className="button button-secondary"
+              disabled={
+                hasAnswered ||
+                helpLoading ||
+                usedHelps.some((help) => help.help_type === 'coin')
+              }
+              onClick={() => void handleUseMultiplayerHelp('coin')}
+            >
+              🪙 Cara ou coroa
+              {usedHelps.some((help) => help.help_type === 'coin')
+                ? ' — Usada'
+                : ''}
+            </button>
+
+            {helpLoading && (
+              <p className="feedback" role="status">
+                Executando ajuda...
+              </p>
+            )}
+
+            {multiplayerHelpFeedback && (
+              <div className="feedback" role="status">
+                {multiplayerHelpFeedback}
+              </div>
+            )}
           </div>
         </section>
 

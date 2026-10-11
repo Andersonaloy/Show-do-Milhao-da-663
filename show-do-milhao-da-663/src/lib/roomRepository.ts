@@ -2,6 +2,17 @@ import { supabase } from './supabaseClient';
 import { ensureAnonymousSession } from './anonymousAuth';
 import type { AvatarAppearance } from '../types/playerAvatar';
 
+export type HelpType = 'leader' | 'focus_points' | 'coin';
+
+export type PlayerHelpResult = {
+  correct_option?: number;
+  outcome?: 'cara' | 'coroa';
+  wrong_option?: number;
+  opinions?: {
+    character: number;
+    selected_option: number;
+  }[];
+};
 
 export async function createRoomInSupabase(
   quizId: string,
@@ -221,4 +232,61 @@ export async function submitPlayerAnswer(
   }
 
   return result as PlayerAnswerResult;
+}
+
+export async function usePlayerHelp(
+  roomCode: string,
+  questionId: string,
+  helpType: HelpType,
+): Promise<PlayerHelpResult> {
+  await ensureAnonymousSession();
+
+  const { data, error } = await supabase.rpc('use_player_help', {
+    p_room_code: roomCode.trim().toUpperCase(),
+    p_question_id: questionId,
+    p_help_type: helpType,
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    throw new Error(
+      'O Supabase não retornou um resultado válido para a ajuda.',
+    );
+  }
+
+  return data as PlayerHelpResult;
+}
+
+export type PlayerUsedHelp = {
+  help_type: HelpType;
+  question_id: string;
+  result: PlayerHelpResult;
+};
+
+export async function loadPlayerUsedHelps(
+  roomCode: string,
+): Promise<PlayerUsedHelp[]> {
+  await ensureAnonymousSession();
+
+  const { data, error } = await supabase.rpc(
+    'get_my_player_used_helps',
+    {
+      p_room_code: roomCode.trim().toUpperCase(),
+    },
+  );
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  if (!Array.isArray(data)) {
+    throw new Error(
+      'O Supabase não retornou o histórico das ajudas.',
+    );
+  }
+
+  return data as PlayerUsedHelp[];
 }
