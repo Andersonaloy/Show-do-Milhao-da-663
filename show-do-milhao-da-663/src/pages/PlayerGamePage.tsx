@@ -95,19 +95,32 @@ function PlayerGamePage() {
       setUsedHelps((current) => [...current, savedHelp]);
 
       if (helpType === 'leader' && result.correct_option !== undefined) {
+        const correctLetter = String.fromCharCode(
+          65 + result.correct_option,
+        );
+
         setMultiplayerHelpFeedback(
-          `💡 A resposta correta é: ${
-            question.options[result.correct_option]
-          }. Se acertar, você ganhará 2 pontos.`,
+          `💡 A resposta correta é ${correctLetter}.`,
         );
       } else if (helpType === 'focus_points' && result.opinions) {
+        const focusPointNames = [
+          'Anderson',
+          'Letícia',
+          'Elis',
+          'Maya',
+        ];
+
         const opinions = result.opinions
-          .map(
-            (opinion) =>
-              `Personagem ${opinion.character}: ${
-                question.options[opinion.selected_option]
-              }`,
-          )
+          .map((opinion) => {
+            const name = focusPointNames[opinion.character - 1]
+              ?? `Ponto Focal ${opinion.character}`;
+
+            const selectedLetter = String.fromCharCode(
+              65 + opinion.selected_option,
+            );
+
+            return `${name}: ${selectedLetter}`;
+          })
           .join(' | ');
 
         setMultiplayerHelpFeedback(`🗣️ ${opinions}`);
@@ -116,19 +129,23 @@ function PlayerGamePage() {
           result.outcome === 'cara' &&
           result.correct_option !== undefined
         ) {
+          const correctLetter = String.fromCharCode(
+            65 + result.correct_option,
+          );
+
           setMultiplayerHelpFeedback(
-            `🪙 Deu cara! A resposta certa é: ${
-              question.options[result.correct_option]
-            }.`,
+            `🪙 Deu cara! A resposta certa é ${correctLetter}.`,
           );
         } else if (
           result.outcome === 'coroa' &&
           result.wrong_option !== undefined
         ) {
+          const wrongLetter = String.fromCharCode(
+            65 + result.wrong_option,
+          );
+
           setMultiplayerHelpFeedback(
-            `🪙 Deu coroa! Uma resposta errada é: ${
-              question.options[result.wrong_option]
-            }.`,
+            `🪙 Deu coroa! Uma resposta errada é ${wrongLetter}.`,
           );
         }
       }

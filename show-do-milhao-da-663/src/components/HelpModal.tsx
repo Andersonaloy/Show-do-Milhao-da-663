@@ -1,6 +1,10 @@
-
 import './HelpModal.css';
 import type { HelpType } from '../lib/roomRepository';
+import andersonImage from '../assets/anderson.png';
+import leticiaImage from '../assets/leticia.png';
+import elisImage from '../assets/elis.png';
+import mayaImage from '../assets/maya.png';
+import majuImage from '../assets/maju.png';
 
 type HelpModalProps = {
   helpType: HelpType;
@@ -79,20 +83,11 @@ function HelpModal({
         )}
 
         {helpType === 'leader' && (
-          <div className="help-character-stage">
-            <div className="help-character-placeholder">
-              <span aria-hidden="true">👩‍💼</span>
+          <div className="focus-character maju-character">
+            <div className="focus-character-avatar">
+              <img src={majuImage} alt="Maju, a líder" />
             </div>
-
-            <p className="help-character-name">
-              A Líder
-            </p>
-
-            <p className="help-description">
-              {loading
-                ? 'A Líder está analisando a pergunta...'
-                : 'Confira o conselho recebido.'}
-            </p>
+            <small>Maju · Líder</small>
           </div>
         )}
 
@@ -100,22 +95,38 @@ function HelpModal({
           <div className="focus-stage">
             <p className="help-description">
               {loading
-                ? 'Os quatro personagens estão discutindo a resposta...'
-                : 'Confira a opinião de cada personagem.'}
+                ? 'Os quatro pontos focais estão discutindo a resposta...'
+                : 'Veja a opinião de cada ponto focal.'}
             </p>
 
             <div className="focus-characters">
-              {['🧑‍💻', '👩‍💼', '🧑‍🔬', '👨‍💼'].map(
-                (character, index) => (
-                  <div
-                    className="focus-character"
-                    key={index}
-                  >
-                    <span>{character}</span>
-                    <small>Ponto Focal {index + 1}</small>
-                  </div>
-                ),
-              )}
+              <div className="focus-character">
+                <div className="focus-character-avatar">
+                  <img src={andersonImage} alt="Anderson" />
+                </div>
+                <small>Anderson</small>
+              </div>
+
+              <div className="focus-character">
+                <div className="focus-character-avatar">
+                  <img src={leticiaImage} alt="Letícia" />
+                </div>
+                <small>Letícia</small>
+              </div>
+
+              <div className="focus-character">
+                <div className="focus-character-avatar">
+                  <img src={elisImage} alt="Elis" />
+                </div>
+                <small>Elis</small>
+              </div>
+
+              <div className="focus-character">
+                <div className="focus-character-avatar">
+                  <img src={mayaImage} alt="Maya" />
+                </div>
+                <small>Maya</small>
+              </div>
             </div>
           </div>
         )}
