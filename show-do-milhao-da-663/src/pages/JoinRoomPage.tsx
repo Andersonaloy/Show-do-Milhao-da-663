@@ -15,11 +15,9 @@ function JoinRoomPage() {
 
   const [roomCode, setRoomCode] = useState('');
   const [playerName, setPlayerName] = useState('');
-  const [isWaiting, setIsWaiting] = useState(false);
   const [error, setError] = useState('');
   const [avatar, setAvatar] = useState<AvatarAppearance>({ ...defaultAvatar });
   const [isJoining, setIsJoining] = useState(false);
-  const [joinedRoom, setJoinedRoom] = useState<{ roomId: string; playerId: string; } | null>(null);
 
     function updateAvatar<K extends keyof AvatarAppearance>(
     property: K,
@@ -59,13 +57,12 @@ function JoinRoomPage() {
             avatar,
             );
 
-            setRoomCode(result.roomCode);
-            setJoinedRoom({
-            roomId: result.roomId,
-            playerId: result.playerId,
+            navigate(`/jogar/${result.roomCode}`, {
+              state: {
+                playerName: normalizedName,
+                avatar,
+              },
             });
-
-            setIsWaiting(true);
         } catch (error: unknown) {
             console.error('Erro ao entrar na sala:', error);
 
@@ -80,27 +77,6 @@ function JoinRoomPage() {
         }
     }
 
-  function handleLeave() {
-    setIsWaiting(false);
-    setError('');
-  }
-
-  function handleStartSimulation() {
-        if (!joinedRoom) {
-            setError('Entre na sala antes de continuar.');
-            return;
-        }
-
-        navigate(`/jogar/${roomCode}`, {
-            state: {
-            playerName: playerName.trim(),
-            avatar,
-            roomId: joinedRoom.roomId,
-            playerId: joinedRoom.playerId,
-            },
-        });
-    }
-
   return (
     <main className="app-shell">
       <header className="topbar">
@@ -113,8 +89,6 @@ function JoinRoomPage() {
 
         <BrandLogo />
       </header>
-
-      {!isWaiting ? (
         <>
           <section className="page-header">
             <span className="eyebrow">Modo jogador</span>
@@ -289,48 +263,6 @@ function JoinRoomPage() {
             </button>
           </form>
         </>
-      ) : (
-        <section className="panel lobby-center">
-          <span className="eyebrow">Você entrou na sala</span>
-
-          <h1 style={{ marginBottom: 0 }}>Aguardando o anfitrião...</h1>
-
-          <p className="muted">
-            Olá, {playerName}! Assim que o anfitrião iniciar a partida,
-            você poderá responder às perguntas.
-          </p>
-
-          <div>
-            <p className="muted">Código da sala</p>
-            <div className="room-code">{roomCode}</div>
-          </div>
-
-          <div className="player-list">
-                <div className="player-chip avatar-player-chip">
-                    <PlayerAvatar appearance={avatar} size={44} />
-                    <span>{playerName} (você)</span>
-                </div>
-          </div>
-
-          <div className="feedback">
-            Você foi registrado na nuvem! A atualização dos jogadores
-            em tempo real será conectada na próxima etapa.
-          </div>
-
-          <div className="form-actions">
-            <button
-              className="button button-primary"
-              onClick={handleStartSimulation}
-            >
-              Simular início da partida
-            </button>
-
-            <button className="button button-secondary" onClick={handleLeave}>
-              Sair da sala
-            </button>
-          </div>
-        </section>
-      )}
     </main>
   );
 }
