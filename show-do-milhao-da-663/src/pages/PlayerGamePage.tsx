@@ -1087,7 +1087,7 @@ function PlayerGamePage() {
               }
               onClick={() => void handleUseMultiplayerHelp('leader')}
             >
-              💡 Revelar a resposta certa
+              💡 Ajuda da líder
               {usedHelps.some((help) => help.help_type === 'leader')
                 ? ' — Usada'
                 : ''}
@@ -1102,7 +1102,7 @@ function PlayerGamePage() {
               }
               onClick={() => void handleUseMultiplayerHelp('focus_points')}
             >
-              🗣️ Consultar os quatro personagens
+              🗣️ Consultar os quatro pontos focais
               {usedHelps.some((help) => help.help_type === 'focus_points')
                 ? ' — Usada'
                 : ''}
