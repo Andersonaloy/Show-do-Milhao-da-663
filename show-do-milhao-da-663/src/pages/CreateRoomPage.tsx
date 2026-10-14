@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import BrandLogo from '../components/BrandLogo';
 import type { QuizDefinition, QuizQuestion } from '../types/quiz';
@@ -39,6 +39,16 @@ function createEmptyQuiz(): QuizDefinition {
 
 function CreateRoomPage() {
   const navigate = useNavigate();
+
+  const [hasCreatorAccess] = useState(
+    () => sessionStorage.getItem('show663-quiz-creator-authorized') === 'true',
+  );
+
+  useEffect(() => {
+    if (!hasCreatorAccess) {
+      navigate('/', { replace: true });
+    }
+  }, [hasCreatorAccess, navigate]);
 
   const [quiz, setQuiz] = useState<QuizDefinition>(
     () => loadDraft() ?? createEmptyQuiz(),
@@ -282,6 +292,10 @@ function CreateRoomPage() {
   }
   
   const currentPreview = quiz.questions[previewIndex];
+
+  if (!hasCreatorAccess) {
+    return null;
+  }
 
   return (
     <main className="app-shell">
