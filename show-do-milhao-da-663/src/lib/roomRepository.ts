@@ -154,10 +154,19 @@ export async function loadPlayerRoom(
     .maybeSingle();
 
   console.log('[Cronômetro do jogador] question_time:', data?.quizzes);
+  console.log('[Cronômetro do jogador] question_started_at:', data?.question_started_at,);
   console.log(
-    '[Cronômetro do jogador] question_started_at:',
-    data?.question_started_at,
+    '[DEBUG CRONÔMETRO]',
+    JSON.stringify({
+      status: data?.status,
+      questionStartedAt: data?.question_started_at,
+      questionTime: Array.isArray(data?.quizzes)
+        ? data.quizzes[0]?.question_time
+        : data?.quizzes?.question_time,
+      agora: new Date().toISOString(),
+    }, null, 2),
   );
+
 
   if (error) {
     throw error;
