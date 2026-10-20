@@ -160,9 +160,10 @@ export async function loadPlayerRoom(
     JSON.stringify({
       status: data?.status,
       questionStartedAt: data?.question_started_at,
-      questionTime: Array.isArray(data?.quizzes)
-        ? data.quizzes[0]?.question_time
-        : data?.quizzes?.question_time,
+      questionTime: data?.quizzes
+        ? (data.quizzes as any).question_time ??
+          ((data.quizzes as any)[0]?.question_time)
+        : null,
       agora: new Date().toISOString(),
     }, null, 2),
   );
