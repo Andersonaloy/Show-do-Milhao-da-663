@@ -518,16 +518,37 @@ function PlayerGamePage() {
       roomData.status !== 'playing' ||
       !roomData.questionStartedAt
     ) {
+      console.log('[DEBUG CRONÔMETRO]', {
+        status: roomData?.status,
+        pergunta: roomData?.currentQuestion,
+        inicio: roomData?.questionStartedAt,
+        motivo: 'Cronômetro aguardando início válido',
+      });
+
       setRemainingSeconds(0);
       return;
     }
 
-    const startedAt = roomData.questionStartedAt;
-    const durationSeconds = roomData.quiz.questionTime;
+    const startedAt = new Date(
+      roomData.questionStartedAt,
+    ).getTime();
+
+    const durationSeconds = Number(
+      roomData.quiz.questionTime,
+    );
+
+    console.log('[DEBUG CRONÔMETRO]', {
+      status: roomData.status,
+      pergunta: roomData.currentQuestion + 1,
+      inicio: roomData.questionStartedAt,
+      inicioEmMilissegundos: startedAt,
+      duracao: durationSeconds,
+      agora: new Date().toISOString(),
+    });
 
     const updateRemainingTime = () => {
       const elapsedSeconds = Math.floor(
-        (Date.now() - new Date(startedAt).getTime()) / 1000,
+        (Date.now() - startedAt) / 1000,
       );
 
       const remaining = Math.max(
@@ -550,6 +571,7 @@ function PlayerGamePage() {
     };
   }, [
     roomData?.status,
+    roomData?.currentQuestion,
     roomData?.questionStartedAt,
     roomData?.quiz.questionTime,
   ]);
