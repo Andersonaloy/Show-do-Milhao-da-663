@@ -4,7 +4,8 @@ import BrandLogo from '../components/BrandLogo';
 import PlayerAvatar from '../components/PlayerAvatar';
 import { defaultAvatar, type AvatarAppearance, } from '../types/playerAvatar';
 import { supabase } from '../lib/supabaseClient';
-import { loadPlayerRoom, loadPlayerUsedHelps, loadPlayerAnswerFeedback, submitPlayerAnswer, usePlayerHelp, type HelpType, type PlayerHelpResult, type PlayerUsedHelp, type PlayerRoomData, } from '../lib/roomRepository';import HelpModal from '../components/HelpModal';
+import { getServerTimeOffset, loadPlayerRoom, loadPlayerUsedHelps, loadPlayerAnswerFeedback, submitPlayerAnswer, usePlayerHelp, type HelpType, type PlayerHelpResult, type PlayerUsedHelp, type PlayerRoomData, } from '../lib/roomRepository';
+import HelpModal from '../components/HelpModal';
 
 type RoomPlayer = {
   id: string;
@@ -518,37 +519,43 @@ function PlayerGamePage() {
       roomData.status !== 'playing' ||
       !roomData.questionStartedAt
     ) {
-      console.log('[DEBUG CRONÔMETRO]', {
-        status: roomData?.status,
-        pergunta: roomData?.currentQuestion,
-        inicio: roomData?.questionStartedAt,
-        motivo: 'Cronômetro aguardando início válido',
-      });
-
       setRemainingSeconds(0);
       return;
     }
 
+    let isActive = true;
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+    let serverTimeOffset = 0;
+
+    const currentRoomData = roomData;
+
     const startedAt = new Date(
-      roomData.questionStartedAt,
+      currentRoomData.questionStartedAt!,
     ).getTime();
 
     const durationSeconds = Number(
-      roomData.quiz.questionTime,
+      currentRoomData.quiz.questionTime,
     );
 
-    console.log('[DEBUG CRONÔMETRO]', {
-      status: roomData.status,
-      pergunta: roomData.currentQuestion + 1,
-      inicio: roomData.questionStartedAt,
-      inicioEmMilissegundos: startedAt,
-      duracao: durationSeconds,
-      agora: new Date().toISOString(),
-    });
+    if (
+      !Number.isFinite(startedAt) ||
+      !Number.isFinite(durationSeconds) ||
+      durationSeconds <= 0
+    ) {
+      console.error('Dados inválidos para o cronômetro.');
+      setRemainingSeconds(0);
+      return;
+    }
 
-    const updateRemainingTime = () => {
+    function updateRemainingTime() {
+      if (!isActive) return;
+
+      // O relógio local é corrigido pela diferença
+      // estimada em relação ao relógio do servidor.
+      const estimatedServerNow = Date.now() + serverTimeOffset;
+
       const elapsedSeconds = Math.floor(
-        (Date.now() - startedAt) / 1000,
+        (estimatedServerNow - startedAt) / 1000,
       );
 
       const remaining = Math.max(
@@ -557,17 +564,53 @@ function PlayerGamePage() {
       );
 
       setRemainingSeconds(remaining);
-    };
+    }
 
+    async function synchronizeClock() {
+      try {
+        const offset = await getServerTimeOffset();
+
+        if (!isActive) return;
+
+        serverTimeOffset = offset;
+        updateRemainingTime();
+
+        console.log('[CRONÔMETRO SINCRONIZADO]', {
+          pergunta: currentRoomData.currentQuestion + 1,
+          diferencaRelogioMs: Math.round(serverTimeOffset),
+          inicioPergunta: currentRoomData.questionStartedAt,
+          tempoTotal: durationSeconds,
+        });
+      } catch (error) {
+        console.error(
+          'Não foi possível sincronizar com o servidor:',
+          error,
+        );
+      }
+    }
+
+    // Atualiza a contagem imediatamente e sincroniza
+    // o relógio com o servidor.
     updateRemainingTime();
+    void synchronizeClock();
 
-    const intervalId = window.setInterval(
-      updateRemainingTime,
-      250,
-    );
+    intervalId = setInterval(() => {
+      updateRemainingTime();
+    }, 250);
+
+    // Corrige possíveis desvios periodicamente.
+    const syncIntervalId = setInterval(() => {
+      void synchronizeClock();
+    }, 15000);
 
     return () => {
-      window.clearInterval(intervalId);
+      isActive = false;
+
+      if (intervalId !== null) {
+        clearInterval(intervalId);
+      }
+
+      clearInterval(syncIntervalId);
     };
   }, [
     roomData?.status,

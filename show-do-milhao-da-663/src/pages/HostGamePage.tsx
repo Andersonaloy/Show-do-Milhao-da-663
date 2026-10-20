@@ -410,13 +410,21 @@ function HostGamePage() {
         try {
             setNotice('');
 
-            const startedAt = new Date().toISOString();
+            const { data: startedAt, error: startError } = await supabase.rpc(
+              'start_room_question',
+              {
+                p_room_code: roomCode!.toUpperCase(),
+                p_current_question: 0,
+              },
+            );
 
-            await updateRoom({
-              status: 'playing',
-              current_question: 0,
-              question_started_at: startedAt,
-            });
+            if (startError) {
+              throw startError;
+            }
+
+            if (!startedAt) {
+              throw new Error('O servidor não retornou o horário de início.');
+            }
 
             setQuestionStartedAt(startedAt);
             setRemainingSeconds(questionTime);
@@ -461,13 +469,22 @@ function HostGamePage() {
 
       // Preparar a próxima pergunta.
       const nextQuestion = currentQuestion + 1;
-      const startedAt = new Date().toISOString();
 
-      await updateRoom({
-        status: 'playing',
-        current_question: nextQuestion,
-        question_started_at: startedAt,
-      });
+      const { data: startedAt, error: startError } = await supabase.rpc(
+        'start_room_question',
+        {
+          p_room_code: roomCode!.toUpperCase(),
+          p_current_question: nextQuestion,
+        },
+      );
+
+      if (startError) {
+        throw startError;
+      }
+
+      if (!startedAt) {
+        throw new Error('O servidor não retornou o horário de início.');
+      }
 
       setQuestionStartedAt(startedAt);
       setRemainingSeconds(questionTime);

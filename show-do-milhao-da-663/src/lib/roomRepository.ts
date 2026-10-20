@@ -336,3 +336,34 @@ export async function loadPlayerUsedHelps(
 
   return data as PlayerUsedHelp[];
 }
+
+/**
+ * Obtém o horário do servidor Supabase e estima
+ * a diferença em relação ao relógio local.
+ */
+export async function getServerTimeOffset(): Promise<number> {
+  const requestStartedAt = Date.now();
+
+  const { data, error } = await supabase.rpc('get_server_time');
+
+  const requestFinishedAt = Date.now();
+
+  if (error) {
+    throw new Error(
+      `Não foi possível sincronizar o horário: ${error.message}`,
+    );
+  }
+
+  const serverTime = new Date(data).getTime();
+
+  if (!Number.isFinite(serverTime)) {
+    throw new Error('O Supabase retornou um horário inválido.');
+  }
+
+  // Usa o ponto médio da requisição para reduzir
+  // o efeito do tempo de ida e volta da rede.
+  const localMidpoint =
+    requestStartedAt + (requestFinishedAt - requestStartedAt) / 2;
+
+  return serverTime - localMidpoint;
+}
