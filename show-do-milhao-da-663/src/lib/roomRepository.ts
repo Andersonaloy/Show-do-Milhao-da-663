@@ -153,8 +153,11 @@ export async function loadPlayerRoom(
     .eq('room_code', normalizedRoomCode)
     .maybeSingle();
 
-  console.log('[loadPlayerRoom] Dados retornados:', data);
-  console.log('[loadPlayerRoom] Erro retornado:', error);
+  console.log('[Cronômetro do jogador] question_time:', data?.quizzes);
+  console.log(
+    '[Cronômetro do jogador] question_started_at:',
+    data?.question_started_at,
+  );
 
   if (error) {
     throw error;
