@@ -337,13 +337,27 @@ function HostGamePage() {
       throw new Error('Código da sala não encontrado.');
     }
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('game_rooms')
       .update(updates)
-      .eq('room_code', roomCode.toUpperCase());
+      .eq('room_code', roomCode.toUpperCase())
+      .select('room_code, status, current_question, question_started_at');
 
     if (error) {
+      console.error('[UPDATE ROOM] Erro:', error);
       throw error;
+    }
+
+    console.log('[UPDATE ROOM] Resultado:', {
+      roomCode,
+      updates,
+      data,
+    });
+
+    if (!data || data.length === 0) {
+      throw new Error(
+        'A atualização não modificou nenhuma sala. Verifique o código e as políticas RLS.',
+      );
     }
   }
 
