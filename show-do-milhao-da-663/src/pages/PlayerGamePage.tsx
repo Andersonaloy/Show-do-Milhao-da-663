@@ -552,7 +552,7 @@ function PlayerGamePage() {
 
       // O relógio local é corrigido pela diferença
       // estimada em relação ao relógio do servidor.
-      const estimatedServerNow = Date.now() + serverTimeOffset;
+      const estimatedServerNow = performance.now() + serverTimeOffset;
 
       const elapsedSeconds = Math.floor(
         (estimatedServerNow - startedAt) / 1000,

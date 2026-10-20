@@ -5,6 +5,7 @@ import PlayerAvatar from '../components/PlayerAvatar';
 import { defaultAvatar, type AvatarAppearance, } from '../types/playerAvatar';
 import type { QuizDefinition } from '../types/quiz';
 import { supabase } from '../lib/supabaseClient';
+import { getServerTimeOffset } from '../lib/roomRepository';
 
 type RoomPlayer = {
   id: string;
@@ -286,42 +287,92 @@ function HostGamePage() {
       };
     }, [roomCode, currentQuestion, gameStarted, players]);
 
-    useEffect(() => {
-      if (!gameStarted || !questionStartedAt) {
+  useEffect(() => {
+    if (!gameStarted || !questionStartedAt) {
+      return;
+    }
+
+    let isActive = true;
+    let serverTimeOffset: number | null = null;
+
+    let timerInterval: ReturnType<typeof setInterval> | null = null;
+    let syncInterval: ReturnType<typeof setInterval> | null = null;
+
+    const startedAt = new Date(questionStartedAt).getTime();
+
+    if (!Number.isFinite(startedAt)) {
+      console.error('Horário de início da pergunta inválido.');
+      setRemainingSeconds(0);
+      return;
+    }
+
+    function updateTimer() {
+      if (!isActive || serverTimeOffset === null) {
         return;
       }
 
-      const updateTimer = () => {
-        const startedAt = new Date(questionStartedAt).getTime();
-        const elapsedSeconds = Math.floor(
-          (Date.now() - startedAt) / 1000,
-        );
+      const estimatedServerNow =
+        performance.now() + serverTimeOffset;
 
-        const remaining = Math.max(
-          0,
-          questionTime - elapsedSeconds,
-        );
+      const elapsedSeconds = Math.floor(
+        (estimatedServerNow - startedAt) / 1000,
+      );
 
-        setRemainingSeconds(remaining);
+      const remaining = Math.max(
+        0,
+        questionTime - elapsedSeconds,
+      );
 
-        if (remaining <= 0) {
-          void handleNextQuestion();
+      setRemainingSeconds(remaining);
+
+      if (remaining <= 0) {
+        void handleNextQuestion();
+      }
+    }
+
+    async function synchronizeClock() {
+      try {
+        const offset = await getServerTimeOffset();
+
+        if (!isActive) {
+          return;
         }
-      };
 
-      updateTimer();
+        serverTimeOffset = offset;
+        updateTimer();
+      } catch (error) {
+        console.error(
+          'Erro ao sincronizar o cronômetro com o Supabase:',
+          error,
+        );
+      }
+    }
 
-      const intervalId = window.setInterval(updateTimer, 250);
+    void synchronizeClock();
 
-      return () => {
-        window.clearInterval(intervalId);
-      };
-    }, [
-      gameStarted,
-      questionStartedAt,
-      questionTime,
-      currentQuestion,
-    ]);
+    timerInterval = setInterval(updateTimer, 250);
+
+    syncInterval = setInterval(() => {
+      void synchronizeClock();
+    }, 15000);
+
+    return () => {
+      isActive = false;
+
+      if (timerInterval !== null) {
+        clearInterval(timerInterval);
+      }
+
+      if (syncInterval !== null) {
+        clearInterval(syncInterval);
+      }
+    };
+  }, [
+    gameStarted,
+    questionStartedAt,
+    questionTime,
+    currentQuestion,
+  ]);
 
 
   const activeQuestion = quiz?.questions[currentQuestion];

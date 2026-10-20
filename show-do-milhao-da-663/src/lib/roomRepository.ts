@@ -338,15 +338,18 @@ export async function loadPlayerUsedHelps(
 }
 
 /**
- * Obtém o horário do servidor Supabase e estima
- * a diferença em relação ao relógio local.
+ * Calcula a diferença entre o horário do servidor Supabase
+ * e o relógio monotônico do navegador.
+ *
+ * Usa performance.now(), que mede tempo decorrido sem
+ * depender do relógio do computador ou de alterações na hora.
  */
 export async function getServerTimeOffset(): Promise<number> {
-  const requestStartedAt = Date.now();
+  const requestStartedAt = performance.now();
 
   const { data, error } = await supabase.rpc('get_server_time');
 
-  const requestFinishedAt = Date.now();
+  const requestFinishedAt = performance.now();
 
   if (error) {
     throw new Error(
@@ -360,10 +363,8 @@ export async function getServerTimeOffset(): Promise<number> {
     throw new Error('O Supabase retornou um horário inválido.');
   }
 
-  // Usa o ponto médio da requisição para reduzir
-  // o efeito do tempo de ida e volta da rede.
-  const localMidpoint =
+  const requestMidpoint =
     requestStartedAt + (requestFinishedAt - requestStartedAt) / 2;
 
-  return serverTime - localMidpoint;
+  return serverTime - requestMidpoint;
 }
