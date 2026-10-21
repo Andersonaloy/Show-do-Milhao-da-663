@@ -789,7 +789,7 @@ function HostGamePage() {
               </span>
             </div>
 
-            <div className="panel">
+            <div className="panel question-transition" key={currentQuestion}>
               <span className="eyebrow">
                 Pergunta {currentQuestion + 1} de {questionCount}
               </span>
@@ -800,13 +800,29 @@ function HostGamePage() {
                   marginTop: 18,
                 }}
               >
-                {activeQuestion?.text}
+                {activeQuestion?.text.split(/\s+/).map((word, index) => (
+                  <span
+                    className="question-transition-word"
+                    key={`${currentQuestion}-${index}`}
+                    style={{
+                      animationDelay: `${Math.min(index * 35, 420)}ms`,
+                    }}
+                  >
+                    {word}{' '}
+                  </span>
+                ))}
               </h1>
             </div>
-
-            <div className="answers-grid">
+                        
+            <div className="answers-grid" key={currentQuestion}>
               {activeQuestion?.options.map((answer, index) => (
-                <div className="answer-button" key={`${index}-${answer}`}>
+                <div
+                  className="answer-button answer-transition"
+                  key={`${index}-${answer}`}
+                  style={{
+                    animationDelay: `${250 + index * 100}ms`,
+                  }}
+                >
                   <span className="gold">
                     {String.fromCharCode(65 + index)}.
                   </span>{' '}

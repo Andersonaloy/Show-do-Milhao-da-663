@@ -990,7 +990,10 @@ function PlayerGamePage() {
 
       <div className="game-layout">
         <section className="game-main">
-          <div className="panel">
+          <div
+            className="panel question-transition"
+            key={synchronizedQuestion.id}
+          >
             <div className="eyebrow">
               Show do Milhão da 663
             </div>
@@ -1001,7 +1004,17 @@ function PlayerGamePage() {
                 marginTop: 18,
               }}
             >
-              {synchronizedQuestion.text}
+              {synchronizedQuestion.text.split(/\s+/).map((word, index) => (
+                <span
+                  className="question-transition-word"
+                  key={`${synchronizedQuestion.id}-${index}`}
+                  style={{
+                    animationDelay: `${Math.min(index * 35, 420)}ms`,
+                  }}
+                >
+                  {word}{' '}
+                </span>
+              ))}
             </h1>
 
             <p className="muted">
@@ -1010,7 +1023,7 @@ function PlayerGamePage() {
             </p>
           </div>
 
-          <div className="answers-grid">
+          <div className="answers-grid" key={synchronizedQuestion.id}>
             {synchronizedQuestion.options.map((answer, index) => {
               let answerStyle: React.CSSProperties | undefined;
 
@@ -1038,10 +1051,13 @@ function PlayerGamePage() {
               return (
                 <button
                   key={`${index}-${answer}`}
-                  className={`answer-button ${
+                  className={`answer-button answer-transition ${
                     multiplayerSelectedOption === index ? 'selected' : ''
                   }`}
-                  style={answerStyle}
+                  style={{
+                    ...answerStyle,
+                    animationDelay: `${250 + index * 100}ms`,
+                  }}
                   onClick={() =>
                     handleSelectMultiplayerAnswer(
                       synchronizedQuestion.id,
