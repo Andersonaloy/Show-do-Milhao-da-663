@@ -357,14 +357,28 @@ export async function getServerTimeOffset(): Promise<number> {
     );
   }
 
+  if (typeof data !== 'string' || !data.trim()) {
+    console.error(
+      '[Sincronização do horário] Resposta recebida:',
+      data,
+    );
+
+    throw new Error(
+      'O Supabase não retornou um horário válido.',
+    );
+  }
+
   const serverTime = new Date(data).getTime();
 
   if (!Number.isFinite(serverTime)) {
-    throw new Error('O Supabase retornou um horário inválido.');
+    throw new Error(
+      'O Supabase retornou um horário inválido.',
+    );
   }
 
   const requestMidpoint =
-    requestStartedAt + (requestFinishedAt - requestStartedAt) / 2;
+    requestStartedAt +
+    (requestFinishedAt - requestStartedAt) / 2;
 
   return serverTime - requestMidpoint;
 }
