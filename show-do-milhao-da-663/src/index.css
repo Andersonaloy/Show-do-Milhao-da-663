@@ -136,6 +136,13 @@ a:focus-visible {
   padding: 26px 24px 48px;
 }
 
+/* Evita rolagem horizontal nas páginas internas em celulares */
+@media (max-width: 560px) {
+  .app-shell:not(.home-screen) {
+    overflow-x: clip;
+  }
+}
+
 .topbar {
   display: flex;
   justify-content: space-between;
