@@ -789,46 +789,37 @@ function HostGamePage() {
               </span>
             </div>
 
-            <div className="panel question-transition" key={currentQuestion}>
-              <span className="eyebrow">
-                Pergunta {currentQuestion + 1} de {questionCount}
-              </span>
+            
+            <div
+              className="question-transition"
+              key={currentQuestion}
+            >
+              <div className="panel question-card">
+                <span className="eyebrow question-label">
+                  Pergunta {currentQuestion + 1} de {questionCount}
+                </span>
 
-              <h1
-                style={{
-                  fontSize: 'clamp(1.5rem, 4vw, 2.4rem)',
-                  marginTop: 18,
-                }}
-              >
-                {activeQuestion?.text.split(/\s+/).map((word, index) => (
-                  <span
-                    className="question-transition-word"
-                    key={`${currentQuestion}-${index}`}
+                <h1 className="question-text">
+                  {activeQuestion?.text}
+                </h1>
+              </div>
+
+              <div className="answers-grid">
+                {activeQuestion?.options.map((answer, index) => (
+                  <div
+                    className="answer-button"
+                    key={`${index}-${answer}`}
                     style={{
-                      animationDelay: `${Math.min(index * 35, 420)}ms`,
+                      animationDelay: `${0.2 + index * 0.14}s`,
                     }}
                   >
-                    {word}{' '}
-                  </span>
+                    <span className="gold">
+                      {String.fromCharCode(65 + index)}.
+                    </span>{' '}
+                    {answer}
+                  </div>
                 ))}
-              </h1>
-            </div>
-                        
-            <div className="answers-grid" key={currentQuestion}>
-              {activeQuestion?.options.map((answer, index) => (
-                <div
-                  className="answer-button answer-transition"
-                  key={`${index}-${answer}`}
-                  style={{
-                    animationDelay: `${250 + index * 100}ms`,
-                  }}
-                >
-                  <span className="gold">
-                    {String.fromCharCode(65 + index)}.
-                  </span>{' '}
-                  {answer}
-                </div>
-              ))}
+              </div>
             </div>
 
             <div className="feedback">

@@ -991,88 +991,75 @@ function PlayerGamePage() {
       <div className="game-layout">
         <section className="game-main">
           <div
-            className="panel question-transition"
+            className="question-transition"
             key={synchronizedQuestion.id}
           >
-            <div className="eyebrow">
-              Show do Milhão da 663
+            <div className="panel question-card">
+              <div className="eyebrow question-label">
+                Show do Milhão da 663
+              </div>
+
+              <h1 className="question-text">
+                {synchronizedQuestion.text}
+              </h1>
+
+              <p className="muted">
+                Escolha sua resposta. Ela será registrada na partida
+                compartilhada.
+              </p>
             </div>
 
-            <h1
-              style={{
-                fontSize: 'clamp(1.5rem, 4vw, 2.4rem)',
-                marginTop: 18,
-              }}
-            >
-              {synchronizedQuestion.text.split(/\s+/).map((word, index) => (
-                <span
-                  className="question-transition-word"
-                  key={`${synchronizedQuestion.id}-${index}`}
-                  style={{
-                    animationDelay: `${Math.min(index * 35, 420)}ms`,
-                  }}
-                >
-                  {word}{' '}
-                </span>
-              ))}
-            </h1>
+            <div className="answers-grid">
+              {synchronizedQuestion.options.map((answer, index) => {
+                let answerStyle: React.CSSProperties | undefined;
 
-            <p className="muted">
-              Escolha sua resposta. Ela será registrada na partida
-              compartilhada.
-            </p>
-          </div>
-
-          <div className="answers-grid" key={synchronizedQuestion.id}>
-            {synchronizedQuestion.options.map((answer, index) => {
-              let answerStyle: React.CSSProperties | undefined;
-
-              if (hasAnswered && currentAnswerFeedback) {
-                if (currentAnswerFeedback.correctOption === index) {
-                  // A resposta correta fica verde.
-                  answerStyle = {
-                    borderColor: '#22c55e',
-                    backgroundColor: 'rgba(34, 197, 94, 0.16)',
-                    color: '#86efac',
-                  };
-                } else if (
-                  multiplayerSelectedOption === index &&
-                  currentAnswerFeedback.isCorrect === false
-                ) {
-                  // A resposta escolhida e errada fica vermelha.
-                  answerStyle = {
-                    borderColor: '#ef4444',
-                    backgroundColor: 'rgba(239, 68, 68, 0.16)',
-                    color: '#fca5a5',
-                  };
-                }
-              }
-
-              return (
-                <button
-                  key={`${index}-${answer}`}
-                  className={`answer-button answer-transition ${
-                    multiplayerSelectedOption === index ? 'selected' : ''
-                  }`}
-                  style={{
-                    ...answerStyle,
-                    animationDelay: `${250 + index * 100}ms`,
-                  }}
-                  onClick={() =>
-                    handleSelectMultiplayerAnswer(
-                      synchronizedQuestion.id,
-                      index,
-                    )
+                if (hasAnswered && currentAnswerFeedback) {
+                  if (currentAnswerFeedback.correctOption === index) {
+                    // A resposta correta fica verde.
+                    answerStyle = {
+                      borderColor: '#22c55e',
+                      backgroundColor: 'rgba(34, 197, 94, 0.16)',
+                      color: '#86efac',
+                    };
+                  } else if (
+                    multiplayerSelectedOption === index &&
+                    currentAnswerFeedback.isCorrect === false
+                  ) {
+                    // A resposta escolhida e errada fica vermelha.
+                    answerStyle = {
+                      borderColor: '#ef4444',
+                      backgroundColor: 'rgba(239, 68, 68, 0.16)',
+                      color: '#fca5a5',
+                    };
                   }
-                  disabled={hasAnswered || answerSubmitting}
-                >
-                  <span className="gold">
-                    {String.fromCharCode(65 + index)}.
-                  </span>{' '}
-                  {answer}
-                </button>
-              );
-            })}
+                }
+
+                return (
+                  <button
+                    key={`${index}-${answer}`}
+                    className={`answer-button ${
+                      multiplayerSelectedOption === index ? 'selected' : ''
+                    }`}
+                    style={{
+                      ...answerStyle,
+                      animationDelay: `${0.2 + index * 0.14}s`,
+                    }}
+                    onClick={() =>
+                      handleSelectMultiplayerAnswer(
+                        synchronizedQuestion.id,
+                        index,
+                      )
+                    }
+                    disabled={hasAnswered || answerSubmitting}
+                  >
+                    <span className="gold">
+                      {String.fromCharCode(65 + index)}.
+                    </span>{' '}
+                    {answer}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {hasAnswered && multiplayerFeedback && (

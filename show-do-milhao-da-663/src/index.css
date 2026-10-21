@@ -2182,63 +2182,110 @@ p {
 }
 
 
-/* Entrada suave da nova pergunta */
-@keyframes questionEnter {
-  from {
-    opacity: 0;
-    transform: translateY(12px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* As palavras aparecem em sequência */
-@keyframes questionWordEnter {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* As alternativas entram uma depois da outra */
-@keyframes answerEnter {
-  from {
-    opacity: 0;
-    transform: translateY(12px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
+/* =========================================
+   TRANSIÇÃO ENTRE PERGUNTAS — ANFITRIÃO
+   ========================================= */
 
 .question-transition {
-  animation: questionEnter 450ms ease-out both;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
 
-.question-transition-word {
-  display: inline-block;
-  animation: questionWordEnter 350ms ease-out both;
+/* Entrada suave do painel da pergunta */
+
+.question-transition .question-card {
+  animation: host-question-enter 0.55s ease-out both;
 }
 
-.answer-transition {
-  animation: answerEnter 400ms ease-out both;
+/* Identificação da pergunta */
+
+.question-transition .question-label {
+  animation: host-question-label 0.4s ease-out both;
 }
 
-/* Respeita quem prefere movimentos reduzidos */
+/* Enunciado com um pequeno atraso */
+
+.question-transition .question-text {
+  animation: host-question-text 0.55s ease-out 0.12s both;
+}
+
+/* Alternativas aparecendo progressivamente */
+
+.question-transition .answer-button {
+  animation-name: host-answer-enter;
+  animation-duration: 0.45s;
+  animation-timing-function: ease-out;
+  animation-fill-mode: both;
+}
+
+/* Animações */
+
+@keyframes host-question-enter {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.985);
+    border-color: rgba(232, 187, 85, 0.65);
+    box-shadow: 0 0 24px rgba(232, 187, 85, 0.10);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    border-color: rgba(167, 122, 240, 0.28);
+    box-shadow:
+      0 6px 0 rgba(0, 0, 0, 0.16),
+      0 15px 35px rgba(0, 0, 0, 0.19),
+      inset 0 1px 0 rgba(255, 255, 255, 0.055);
+  }
+}
+
+@keyframes host-question-label {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes host-question-text {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+    filter: blur(3px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+@keyframes host-answer-enter {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Acessibilidade */
+
 @media (prefers-reduced-motion: reduce) {
-  .question-transition,
-  .question-transition-word,
-  .answer-transition {
-    animation: none;
+  .question-transition .question-card,
+  .question-transition .question-label,
+  .question-transition .question-text,
+  .question-transition .answer-button {
+    animation: none !important;
+    filter: none !important;
   }
 }
