@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg">
+  <symbol id="favorite" viewBox="0 0 24 24">
+    <path
+      d="M12 2.5 14.8 8.2 21 9.1 16.5 13.5
+         17.6 19.7 12 16.8 6.4 19.7 7.5 13.5
+         3 9.1 9.2 8.2Z"
+      fill="currentColor"
+      stroke="currentColor"
+      stroke-width="1.2"
+      stroke-linejoin="round"
+    />
+  </symbol>
+  <symbol id="favorite-filled" viewBox="0 0 24 24">
+    <path
+      d="M12 2.5 14.8 8.2 21 9.1 16.5 13.5
+         17.6 19.7 12 16.8 6.4 19.7 7.5 13.5
+         3 9.1 9.2 8.2Z"
+      fill="#F6C453"
+    />
+  </symbol>
+  <symbol id="coin" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="10" fill="#F6C453"/>
+    <circle cx="12" cy="12" r="7.8"
+            fill="none" stroke="#8A5A10" stroke-width="1"/>
+    <text x="12" y="16" font-size="12" font-weight="bold"
+          text-anchor="middle" fill="#59370B">$</text>
+  </symbol>
+</svg>
