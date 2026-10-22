@@ -61,6 +61,7 @@ function JoinRoomPage() {
               state: {
                 playerName: normalizedName,
                 avatar,
+                playerId: result.playerId,
               },
             });
         } catch (error: unknown) {

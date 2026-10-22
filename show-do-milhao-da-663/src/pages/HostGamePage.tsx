@@ -108,6 +108,7 @@ function HostGamePage() {
                 .from('room_players')
                 .select('id, player_name, score, avatar')
                 .eq('room_id', roomId)
+                .eq('is_active', true)
                 .order('joined_at', { ascending: true });
 
               if (error) {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import BrandLogo from '../components/BrandLogo';
 import PlayerAvatar from '../components/PlayerAvatar';
@@ -23,10 +23,13 @@ function PlayerGamePage() {
     playerName?: string;
     avatar?: AvatarAppearance;
     quizId?: string;
+    playerId?: string;
   } | null;
 
   const playerName = navigationState?.playerName ?? 'Jogador';
   const avatar = navigationState?.avatar ?? defaultAvatar;
+  const playerId = navigationState?.playerId;
+  const isLeavingRef = useRef(false);
 
   const [roomData, setRoomData] = useState<PlayerRoomData | null>(null);
   const [roomLoading, setRoomLoading] = useState(true);
@@ -49,10 +52,36 @@ function PlayerGamePage() {
   const [remainingSeconds, setRemainingSeconds] = useState(0);
 
   const [answerFeedback, setAnswerFeedback] = useState<{
-    questionId: string;
-    correctOption: number | null;
-    isCorrect: boolean | null;
-  } | null>(null);
+      questionId: string;
+      correctOption: number | null;
+      isCorrect: boolean | null;
+    } | null>(null);
+
+    async function handleLeaveRoom() {
+    if (isLeavingRef.current) return;
+
+    isLeavingRef.current = true;
+
+    try {
+      if (playerId) {
+        const { error } = await supabase.rpc('leave_room', {
+          p_player_id: playerId,
+        });
+
+        if (error) {
+          throw error;
+        }
+      } else {
+        console.warn(
+          'Identificador do jogador não encontrado. A saída não foi registrada no Supabase.',
+        );
+      }
+    } catch (error: unknown) {
+      console.error('Erro ao registrar saída da sala:', error);
+    } finally {
+      navigate('/');
+    }
+  }
 
   async function handleUseMultiplayerHelp(helpType: HelpType) {
     if (!roomCode || !roomData || helpLoading) return;
@@ -378,6 +407,61 @@ function PlayerGamePage() {
     };
   }, [roomCode]);
 
+      useEffect(() => {
+      if (
+        !playerId ||
+        !roomData?.roomId ||
+        roomData.status === 'finished'
+      ) {
+        return;
+      }
+
+      let isActive = true;
+      let heartbeatInProgress = false;
+
+      async function sendHeartbeat() {
+        if (
+          !isActive ||
+          isLeavingRef.current ||
+          heartbeatInProgress
+        ) {
+          return;
+        }
+
+        heartbeatInProgress = true;
+
+        try {
+          const { error } = await supabase.rpc('player_heartbeat', {
+            p_player_id: playerId,
+          });
+
+          if (error) {
+            throw error;
+          }
+        } catch (error: unknown) {
+          console.error(
+            'Não foi possível renovar a presença do jogador:',
+            error,
+          );
+        } finally {
+          heartbeatInProgress = false;
+        }
+      }
+
+      // Registra a presença imediatamente.
+      void sendHeartbeat();
+
+      // Renova a presença a cada 15 segundos.
+      const heartbeatInterval = setInterval(() => {
+        void sendHeartbeat();
+      }, 15000);
+
+      return () => {
+        isActive = false;
+        clearInterval(heartbeatInterval);
+      };
+    }, [playerId, roomData?.roomId, roomData?.status]);
+
   useEffect(() => {
     if (!roomCode || !roomData?.roomId) return;
 
@@ -446,6 +530,7 @@ function PlayerGamePage() {
           .from('room_players')
           .select('id, player_name, score, avatar')
           .eq('room_id', roomId)
+          .eq('is_active', true)
           .order('joined_at', { ascending: true });
 
         if (error) throw error;
@@ -712,10 +797,10 @@ function PlayerGamePage() {
         <header className="topbar">
             <BrandLogo />
             <button
-            className="button button-secondary"
-            onClick={() => navigate('/')}
+              className="button button-secondary"
+              onClick={() => void handleLeaveRoom()}
             >
-            Sair da sala
+              Sair da sala
             </button>
         </header>
 
@@ -958,7 +1043,7 @@ function PlayerGamePage() {
         <BrandLogo />
         <button
           className="button button-secondary"
-          onClick={() => navigate('/')}
+          onClick={() => void handleLeaveRoom()}
         >
           Sair da partida
         </button>
