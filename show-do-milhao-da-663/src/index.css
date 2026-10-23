@@ -2289,3 +2289,25 @@ p {
     filter: none !important;
   }
 }
+
+/* Botão de expulsão escondido por padrão */
+.player-kick-button {
+  display: none;
+}
+
+/* Mostra o botão ao passar o mouse sobre o jogador */
+.player-row-with-kick:hover .player-kick-button {
+  display: inline-flex;
+}
+
+/* Também mostra o botão quando ele recebe foco pelo teclado */
+.player-row-with-kick:focus-within .player-kick-button {
+  display: inline-flex;
+}
+
+/* Em telas sensíveis ao toque, não depende do mouse */
+@media (hover: none) {
+  .player-kick-button {
+    display: inline-flex;
+  }
+}

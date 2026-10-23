@@ -363,7 +363,7 @@ function CreateRoomPage() {
 
         <p className="muted">
           {quiz.questions.length} pergunta(s) · Pontuação padrão:
-          acerto +2, acerto com ajuda +1, pular 0, erro -1.
+          acerto +4, acerto com ajuda +2, pular 0, erro -2, primeiro a acertar +1 extra.
         </p>
       </section>
 

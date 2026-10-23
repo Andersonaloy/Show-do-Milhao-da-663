@@ -775,7 +775,7 @@ function HostGamePage() {
                         .map((player, index) => (
                           <div
                             key={player.id}
-                            className="score-row"
+                            className="score-row player-row-with-kick"
                             style={{ justifyContent: 'space-between', gap: 12 }}
                           >
                             <div
@@ -812,7 +812,7 @@ function HostGamePage() {
 
                               <button
                                 type="button"
-                                className="button button-danger"
+                                className="button button-danger player-kick-button"
                                 onClick={() => handleKickPlayer(player)}
                               >
                                 Expulsar
@@ -934,7 +934,7 @@ function HostGamePage() {
                   .sort((a, b) => b.score - a.score)
                   .map((player, index) => (
                     <div
-                      className="score-row"
+                      className="score-row player-row-with-kick"
                       key={player.id}
                       style={{ gap: 10 }}
                     >
@@ -967,7 +967,7 @@ function HostGamePage() {
 
                         <button
                           type="button"
-                          className="button button-danger"
+                          className="button button-danger player-kick-button"
                           onClick={() => handleKickPlayer(player)}
                         >
                           Expulsar
