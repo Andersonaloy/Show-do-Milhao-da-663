@@ -2311,3 +2311,61 @@ p {
     display: inline-flex;
   }
 }
+
+/* Tamanho responsivo do enunciado */
+.question-card .question-text {
+  font-size: clamp(1rem, 1.8vw, 1.4rem);
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+/* Melhor espaçamento nas alternativas */
+.answers-grid .answer-button {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  text-align: left;
+  line-height: 1.4;
+}
+
+/* Mantém a letra da alternativa separada do texto */
+.answers-grid .answer-button .gold {
+  flex-shrink: 0;
+}
+
+/**/
+
+/* =========================================
+   CONFORTO VISUAL — PERGUNTAS E ENUNCIADOS
+   ========================================= */
+
+.question-card .question-text {
+  color: #DED8E8;
+  font-weight: 600;
+  text-shadow: none;
+}
+
+/* Texto das alternativas */
+.answers-grid .answer-button {
+  color: #D8D1E2;
+  font-weight: 500;
+}
+
+/* Letra A, B, C e D */
+.answers-grid .answer-button .gold {
+  color: #E8BB55;
+  font-weight: 800;
+}
+
+/* Preserva as cores dos estados das respostas */
+.answers-grid .answer-button.selected {
+  color: #FFF0B3;
+}
+
+.answers-grid .answer-button.correct {
+  color: #DFFFF0;
+}
+
+.answers-grid .answer-button.wrong {
+  color: #FFE0E6;
+}
