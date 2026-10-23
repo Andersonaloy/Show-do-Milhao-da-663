@@ -30,6 +30,7 @@ function PlayerGamePage() {
   const avatar = navigationState?.avatar ?? defaultAvatar;
   const playerId = navigationState?.playerId;
   const isLeavingRef = useRef(false);
+  const [playerRemoved, setPlayerRemoved] = useState(false);
 
   const [roomData, setRoomData] = useState<PlayerRoomData | null>(null);
   const [roomLoading, setRoomLoading] = useState(true);
@@ -407,60 +408,115 @@ function PlayerGamePage() {
     };
   }, [roomCode]);
 
-      useEffect(() => {
+  useEffect(() => {
+    if (
+      !playerId ||
+      !roomData?.roomId ||
+      roomData.status === 'finished'
+    ) {
+      return;
+    }
+
+    let isActive = true;
+    let heartbeatInProgress = false;
+
+    async function sendHeartbeat() {
       if (
-        !playerId ||
-        !roomData?.roomId ||
-        roomData.status === 'finished'
+        !isActive ||
+        isLeavingRef.current ||
+        heartbeatInProgress
       ) {
         return;
       }
 
-      let isActive = true;
-      let heartbeatInProgress = false;
+      heartbeatInProgress = true;
 
-      async function sendHeartbeat() {
-        if (
-          !isActive ||
-          isLeavingRef.current ||
-          heartbeatInProgress
-        ) {
+      try {
+        const { error } = await supabase.rpc('player_heartbeat', {
+          p_player_id: playerId,
+        });
+
+        if (error) {
+          throw error;
+        }
+      } catch (error: unknown) {
+        console.error(
+          'Não foi possível renovar a presença do jogador:',
+          error,
+        );
+      } finally {
+        heartbeatInProgress = false;
+      }
+    }
+
+    // Registra a presença imediatamente.
+    void sendHeartbeat();
+
+    // Renova a presença a cada 15 segundos.
+    const heartbeatInterval = setInterval(() => {
+      void sendHeartbeat();
+    }, 15000);
+
+    return () => {
+      isActive = false;
+      clearInterval(heartbeatInterval);
+    };
+  }, [playerId, roomData?.roomId, roomData?.status]);
+
+  useEffect(() => {
+    if (!playerId || !roomData?.roomId || playerRemoved) {
+      return;
+    }
+
+    let isActive = true;
+    let checkInProgress = false;
+
+    async function checkPlayerStatus() {
+      if (!isActive || checkInProgress) return;
+
+      checkInProgress = true;
+
+      try {
+        const { data, error } = await supabase
+          .from('room_players')
+          .select('is_active')
+          .eq('id', playerId!)
+          .eq('room_id', roomData!.roomId)
+          .maybeSingle();
+
+        if (error) {
+          console.error(
+            'Não foi possível verificar a presença do jogador:',
+            error,
+          );
           return;
         }
 
-        heartbeatInProgress = true;
-
-        try {
-          const { error } = await supabase.rpc('player_heartbeat', {
-            p_player_id: playerId,
-          });
-
-          if (error) {
-            throw error;
-          }
-        } catch (error: unknown) {
-          console.error(
-            'Não foi possível renovar a presença do jogador:',
-            error,
-          );
-        } finally {
-          heartbeatInProgress = false;
+        if (isActive && data && data.is_active === false) {
+          isLeavingRef.current = true;
+          setPlayerRemoved(true);
         }
+      } catch (error: unknown) {
+        console.error(
+          'Erro ao verificar se o jogador continua na sala:',
+          error,
+        );
+      } finally {
+        checkInProgress = false;
       }
+    }
 
-      // Registra a presença imediatamente.
-      void sendHeartbeat();
+    void checkPlayerStatus();
 
-      // Renova a presença a cada 15 segundos.
-      const heartbeatInterval = setInterval(() => {
-        void sendHeartbeat();
-      }, 15000);
+    const statusInterval = setInterval(() => {
+      void checkPlayerStatus();
+    }, 3000);
 
-      return () => {
-        isActive = false;
-        clearInterval(heartbeatInterval);
-      };
-    }, [playerId, roomData?.roomId, roomData?.status]);
+    return () => {
+      isActive = false;
+      clearInterval(statusInterval);
+    };
+  }, [playerId, roomData?.roomId, playerRemoved]);
 
   useEffect(() => {
     if (!roomCode || !roomData?.roomId) return;
@@ -720,6 +776,7 @@ function PlayerGamePage() {
           .from('room_players')
           .select('id, player_name, score, avatar')
           .eq('room_id', roomData!.roomId)
+          .eq('is_active', true)
           .order('score', { ascending: false })
           .order('joined_at', { ascending: true });
 
@@ -749,6 +806,35 @@ function PlayerGamePage() {
       isActive = false;
     };
   }, [roomData?.status, roomData?.roomId, rankingRefresh]);
+
+  if (playerRemoved) {
+    return (
+      <main className="app-shell">
+        <header className="topbar">
+          <BrandLogo />
+        </header>
+
+        <section className="panel lobby-center">
+          <h1>Você foi removido da sala</h1>
+
+          <p className="feedback error" role="alert">
+            O anfitrião removeu você desta partida.
+          </p>
+
+          <p className="muted">
+            Você não pode continuar participando desta sala.
+          </p>
+
+          <button
+            className="button button-primary"
+            onClick={() => navigate('/')}
+          >
+            Voltar ao início
+          </button>
+        </section>
+      </main>
+    );
+  }
 
   if (roomLoading) {
     return (

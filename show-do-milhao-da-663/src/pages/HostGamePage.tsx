@@ -70,6 +70,58 @@ function HostGamePage() {
 
   const advancingRef = useRef(false);
 
+  async function handleKickPlayer(player: RoomPlayer) {
+    const confirmed = window.confirm(
+      `Tem certeza de que deseja expulsar ${player.player_name} da sala?`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setNotice('');
+
+      // Busca o identificador da sala pelo código.
+      const { data: room, error: roomError } = await supabase
+        .from('game_rooms')
+        .select('id')
+        .eq('room_code', roomCode!.toUpperCase())
+        .maybeSingle();
+
+      if (roomError) {
+        throw roomError;
+      }
+
+      if (!room) {
+        throw new Error('Sala não encontrada.');
+      }
+
+      // Solicita ao Supabase a expulsão segura do jogador.
+      const { error: kickError } = await supabase.rpc(
+        'kick_room_player',
+        {
+          p_room_id: room.id,
+          p_player_id: player.id,
+        },
+      );
+
+      if (kickError) {
+        throw kickError;
+      }
+
+      setNotice(`${player.player_name} foi removido da sala.`);
+    } catch (error: unknown) {
+      console.error('Erro ao expulsar jogador:', error);
+
+      setNotice(
+        error instanceof Error
+          ? `Não foi possível expulsar o jogador: ${error.message}`
+          : 'Não foi possível expulsar o jogador. Tente novamente.',
+      );
+    }
+  }
+
   useEffect(() => {
         if (!roomCode) {
             return;
@@ -231,7 +283,8 @@ function HostGamePage() {
           const { data: roomPlayers, error: playersError } = await supabase
             .from('room_players')
             .select('id')
-            .eq('room_id', room.id);
+            .eq('room_id', room.id)
+            .eq('is_active', true);
 
           if (playersError) throw playersError;
 
@@ -745,9 +798,26 @@ function HostGamePage() {
                               </div>
                             </div>
 
-                            <strong className="gold">
-                              {player.score} pts
-                            </strong>
+                            <div
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 10,
+                                flexShrink: 0,
+                              }}
+                            >
+                              <strong className="gold">
+                                {player.score} pts
+                              </strong>
+
+                              <button
+                                type="button"
+                                className="button button-danger"
+                                onClick={() => handleKickPlayer(player)}
+                              >
+                                Expulsar
+                              </button>
+                            </div>
                           </div>
                         ))}
                     </div>
@@ -834,6 +904,12 @@ function HostGamePage() {
               Controles exclusivos do anfitrião.
             </p>
 
+            {notice && (
+              <div className="feedback" role="status">
+                {notice}
+              </div>
+            )}
+
             <div className="score-row">
               <span>Pergunta atual</span>
               <strong>{currentQuestion + 1}/{questionCount}</strong>
@@ -877,9 +953,26 @@ function HostGamePage() {
                         </span>
                       </div>
 
-                      <strong className="gold">
-                        {player.score} pts
-                      </strong>
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 10,
+                          flexShrink: 0,
+                        }}
+                      >
+                        <strong className="gold">
+                          {player.score} pts
+                        </strong>
+
+                        <button
+                          type="button"
+                          className="button button-danger"
+                          onClick={() => handleKickPlayer(player)}
+                        >
+                          Expulsar
+                        </button>
+                      </div>
                     </div>
                 ))}
             </div>
